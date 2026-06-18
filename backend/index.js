@@ -89,6 +89,7 @@ function toDocument(row) {
     mimeType: row.mime_type,
     fileSize: row.file_size,
     uploadedBy: row.uploaded_by,
+    updatedAt: row.updated_at,
     publishedAt: row.published_at,
     publishedBy: row.published_by,
     downloadUrl: row.file_path ? `/documents/${row.id}/download` : null,

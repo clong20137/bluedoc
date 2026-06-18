@@ -265,6 +265,29 @@ function App() {
     setActiveTab('documents');
   }
 
+  async function replaceViewedDocument(documentId, file) {
+    if (!file) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('document', file);
+
+    const response = await apiFetch(`/documents/${documentId}/file`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.error || 'Unable to replace document file.');
+    }
+
+    const updatedDocument = await response.json();
+    await loadDashboard();
+    setViewingDocument(updatedDocument);
+  }
+
   async function signInWithShield(event) {
     event.preventDefault();
     setIsSigningIn(true);
@@ -520,6 +543,7 @@ function App() {
                 });
               }}
               viewingDocument={viewingDocument}
+              onReplaceFile={replaceViewedDocument}
               onCloseViewer={() => setViewingDocument(null)}
             />
           )}
@@ -600,12 +624,17 @@ function Documents({
   documentError,
   onCancel,
   viewingDocument,
-  onCloseViewer
+  onCloseViewer,
+  onReplaceFile
 }) {
   return (
     <section className="space-y-6">
       {viewingDocument && (
-        <DocumentViewer document={viewingDocument} onClose={onCloseViewer} />
+        <DocumentViewer
+          document={viewingDocument}
+          onClose={onCloseViewer}
+          onReplaceFile={onReplaceFile}
+        />
       )}
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="rounded border border-line bg-white shadow-panel">
@@ -787,19 +816,42 @@ function Documents({
   );
 }
 
-function DocumentViewer({ document, onClose }) {
+function DocumentViewer({ document, onClose, onReplaceFile }) {
+  const [replacementFile, setReplacementFile] = useState(null);
+  const [replaceError, setReplaceError] = useState('');
+  const [isReplacing, setIsReplacing] = useState(false);
+
   const viewUrl = document.viewUrl ? absoluteApiUrl(document.viewUrl) : '';
-  const downloadUrl = document.downloadUrl ? absoluteApiUrl(document.downloadUrl) : '';
-  const isPdf = document.mimeType === 'application/pdf' || document.originalFileName?.toLowerCase().endsWith('.pdf');
-  const isOffice = [
+  const fileName = (document.originalFileName || '').toLowerCase();
+  const isTextFile = fileName.endsWith('.txt') || document.mimeType === 'text/plain';
+  const isPdf = document.mimeType === 'application/pdf' || fileName.endsWith('.pdf');
+  const officeMimeTypes = new Set([
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-powerpoint',
     'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  ].includes(document.mimeType);
-  const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
+  ]);
+  const isOffice = officeMimeTypes.has(document.mimeType) || ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].some((extension) => fileName.endsWith(extension));
+  const cacheBuster = [document.version, document.fileSize, document.updatedAt].filter(Boolean).join('-');
+  const viewSource = cacheBuster ? `${viewUrl}${viewUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(cacheBuster)}` : viewUrl;
+  const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(viewSource)}`;
+
+  async function replaceDocument() {
+    if (!replacementFile || !onReplaceFile) return;
+
+    try {
+      setIsReplacing(true);
+      setReplaceError('');
+      await onReplaceFile(document.id, replacementFile);
+      setReplacementFile(null);
+    } catch (error) {
+      setReplaceError(error.message);
+    } finally {
+      setIsReplacing(false);
+    }
+  }
 
   return (
     <div className="rounded border border-line bg-white shadow-panel">
@@ -822,12 +874,20 @@ function DocumentViewer({ document, onClose }) {
       </div>
       <div className="h-[70vh] bg-field">
         {isPdf && (
-          <iframe title={document.title} src={viewUrl} className="h-full w-full border-0" />
+          <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
         )}
         {!isPdf && isOffice && (
-          <iframe title={document.title} src={officeViewerUrl} className="h-full w-full border-0" />
+          <div className="h-full">
+            <iframe title={document.title} src={officeViewerUrl} className="h-full w-full border-0" />
+            <p className="px-4 py-2 text-xs text-slategray">
+              If Office preview does not load in this environment, use Download and open locally.
+            </p>
+          </div>
         )}
-        {!isPdf && !isOffice && (
+        {isTextFile && (
+          <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
+        )}
+        {!isPdf && !isOffice && !isTextFile && (
           <div className="grid h-full place-items-center p-6 text-center">
             <div>
               <p className="font-semibold">Preview is not available for this file type.</p>
@@ -835,6 +895,27 @@ function DocumentViewer({ document, onClose }) {
             </div>
           </div>
         )}
+      </div>
+      <div className="border-t border-line px-5 py-4">
+        <h4 className="text-sm font-semibold">Replace document file</h4>
+        <p className="mt-1 text-xs text-slategray">Use this after you edit the document in Word/Excel/PowerPoint and keep the same policy record.</p>
+        <div className="mt-3 flex gap-2">
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+            onChange={(event) => setReplacementFile(event.target.files?.[0] || null)}
+            className="block flex-1 text-sm text-slategray file:mr-3 file:h-9 file:rounded file:border-0 file:bg-field file:px-3 file:text-sm file:font-semibold file:text-harbor"
+          />
+          <button
+            type="button"
+            onClick={replaceDocument}
+            disabled={!replacementFile || isReplacing}
+            className="inline-flex h-9 items-center gap-2 rounded border border-line px-3 text-sm font-semibold text-slategray disabled:opacity-50"
+          >
+            {isReplacing ? 'Replacing' : 'Replace'}
+          </button>
+        </div>
+        {replaceError && <p className="mt-2 text-sm font-semibold text-rose">{replaceError}</p>}
       </div>
     </div>
   );
