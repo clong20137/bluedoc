@@ -70,6 +70,8 @@ function App() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [sessionTimeLeft, setSessionTimeLeft] = useState('');
+  const [sessionExpiringSoon, setSessionExpiringSoon] = useState(false);
   const [documentError, setDocumentError] = useState('');
   const [documentForm, setDocumentForm] = useState({
     title: '',
@@ -102,6 +104,8 @@ function App() {
 
       const payload = await response.json();
       setSession(payload);
+      setSessionExpiringSoon(false);
+      setSessionTimeLeft('');
       return payload;
     } catch (requestError) {
       setError(requestError.message);
@@ -143,6 +147,39 @@ function App() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (!session?.authenticated || !session.account?.sessionExpiresAt) {
+      setSessionTimeLeft('');
+      setSessionExpiringSoon(false);
+      return;
+    }
+
+    const updateSessionTimer = () => {
+      const expiresAt = Date.parse(session.account.sessionExpiresAt);
+      if (!Number.isFinite(expiresAt)) {
+        setSessionTimeLeft('');
+        return;
+      }
+
+      const remainingMs = expiresAt - Date.now();
+      if (remainingMs <= 0) {
+        signOut();
+        return;
+      }
+
+      const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      setSessionTimeLeft(`${minutes}:${String(seconds).padStart(2, '0')}`);
+      setSessionExpiringSoon(remainingMs <= 300000);
+    };
+
+    updateSessionTimer();
+    const interval = setInterval(updateSessionTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [session?.authenticated, session?.account?.sessionExpiresAt]);
 
   const filteredDocuments = useMemo(() => {
     if (!dashboard) return [];
@@ -319,6 +356,8 @@ function App() {
     setDashboard(null);
     setSession({ authenticated: false, signInUrl: SHIELD_SIGN_IN_URL });
     setActiveTab('overview');
+    setSessionTimeLeft('');
+    setSessionExpiringSoon(false);
   }
 
   if (loading) {
@@ -418,6 +457,14 @@ function App() {
           <div className="mt-6 rounded border border-line bg-white p-3 text-sm">
             <p className="font-semibold">{session.account.displayName}</p>
             <p className="text-xs text-slategray">{session.account.email}</p>
+            {session.account.requiresMfa && (
+              <p className="mt-1 text-xs font-semibold text-slategray">MFA account</p>
+            )}
+            {sessionTimeLeft && (
+              <p className={classNames('mt-1 text-xs font-semibold', sessionExpiringSoon ? 'text-rose' : 'text-slategray')}>
+                Session expires in {sessionTimeLeft}
+              </p>
+            )}
             <button
               type="button"
               onClick={signOut}
@@ -822,6 +869,7 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
   const [isReplacing, setIsReplacing] = useState(false);
 
   const viewUrl = document.viewUrl ? absoluteApiUrl(document.viewUrl) : '';
+  const downloadUrl = document.downloadUrl ? absoluteApiUrl(document.downloadUrl) : '';
   const fileName = (document.originalFileName || '').toLowerCase();
   const isTextFile = fileName.endsWith('.txt') || document.mimeType === 'text/plain';
   const isPdf = document.mimeType === 'application/pdf' || fileName.endsWith('.pdf');

@@ -81,7 +81,9 @@ function publicAccount(account) {
     displayName: account.displayName || `${account.firstName || ''} ${account.lastName || ''}`.trim() || account.email,
     role: account.role,
     district: account.district,
-    isActive: Boolean(account.isActive)
+    isActive: Boolean(account.isActive),
+    requiresMfa: Boolean(account.twoFactorEnabled),
+    sessionExpiresAt: account.sessionExpiresAt || null
   };
 }
 
@@ -100,7 +102,9 @@ async function getShieldAccountForRequest(req) {
       users.displayName,
       users.role,
       users.district,
-      users.isActive
+      users.isActive,
+      users.twoFactorEnabled,
+      user_sessions.expiresAt AS sessionExpiresAt
     FROM user_sessions
     INNER JOIN users ON users.id = user_sessions.userId
     WHERE user_sessions.tokenHash = ?
@@ -134,7 +138,7 @@ async function createShieldSession(userId) {
     [id, userId, hashToken(token), expiresAt]
   );
 
-  return token;
+  return { token, expiresAt };
 }
 
 function setShieldSessionCookie(req, res, token) {
@@ -224,12 +228,15 @@ async function loginWithShieldCredentials(req, res) {
     });
   }
 
-  const token = await createShieldSession(account.id);
+  const { token, expiresAt } = await createShieldSession(account.id);
   setShieldSessionCookie(req, res, token);
 
   return res.json({
     authenticated: true,
-    account: publicAccount(account)
+    account: publicAccount({
+      ...account,
+      sessionExpiresAt: new Date(expiresAt).toISOString()
+    })
   });
 }
 
