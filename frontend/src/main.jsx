@@ -873,6 +873,7 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
   const fileName = (document.originalFileName || '').toLowerCase();
   const isTextFile = fileName.endsWith('.txt') || document.mimeType === 'text/plain';
   const isPdf = document.mimeType === 'application/pdf' || fileName.endsWith('.pdf');
+  const isSecureViewerCapable = window.location.protocol === 'https:' ? viewUrl.startsWith('https://') : true;
   const officeMimeTypes = new Set([
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -924,7 +925,7 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
         {isPdf && (
           <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
         )}
-        {!isPdf && isOffice && (
+        {!isPdf && isOffice && isSecureViewerCapable && (
           <div className="h-full">
             <iframe title={document.title} src={officeViewerUrl} className="h-full w-full border-0" />
             <p className="px-4 py-2 text-xs text-slategray">
@@ -935,16 +936,30 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
         {isTextFile && (
           <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
         )}
-        {!isPdf && !isOffice && !isTextFile && (
+        {!isPdf && (!isOffice || !isSecureViewerCapable) && !isTextFile && (
           <div className="grid h-full place-items-center p-6 text-center">
             <div>
-              <p className="font-semibold">Preview is not available for this file type.</p>
-              <p className="mt-2 text-sm text-slategray">Download the file to view it locally.</p>
+              <p className="font-semibold">
+                {isSecureViewerCapable ? 'Preview is not available for this file type.' : 'Secure preview is blocked for mixed content.'}
+              </p>
+              <p className="mt-2 text-sm text-slategray">
+                {isSecureViewerCapable
+                  ? 'Download the file to view it locally.'
+                  : 'Use HTTPS for the BlueDoc API and set VITE_API_BASE_URL to https://... to restore secure preview.'}
+              </p>
             </div>
           </div>
         )}
       </div>
       <div className="border-t border-line px-5 py-4">
+        <a
+          href={viewSource}
+          target="_blank"
+          rel="noreferrer"
+          className="mb-3 inline-flex h-9 items-center gap-2 rounded border border-line px-3 text-sm font-semibold text-slategray hover:text-harbor"
+        >
+          Open full preview in new tab
+        </a>
         <h4 className="text-sm font-semibold">Replace document file</h4>
         <p className="mt-1 text-xs text-slategray">Use this after you edit the document in Word/Excel/PowerPoint and keep the same policy record.</p>
         <div className="mt-3 flex gap-2">
