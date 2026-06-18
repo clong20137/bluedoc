@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { pingDatabase, query } = require('./db');
 
 const app = express();
 const port = process.env.PORT || 4100;
+const appBasePath = process.env.APP_BASE_PATH || '/bluedoc';
+const clientDistPath = path.join(__dirname, '..', 'dist');
 
 app.use(cors());
 app.use(express.json());
@@ -121,12 +124,14 @@ async function getActivity() {
   return rows.map(toActivity);
 }
 
-app.get('/api/health', asyncRoute(async (req, res) => {
+const apiRouter = express.Router();
+
+apiRouter.get('/health', asyncRoute(async (req, res) => {
   await pingDatabase();
   res.json({ ok: true, name: 'BlueDoc API', database: 'connected' });
 }));
 
-app.get('/api/dashboard', asyncRoute(async (req, res) => {
+apiRouter.get('/dashboard', asyncRoute(async (req, res) => {
   const [documents, training, employees, activity] = await Promise.all([
     getDocuments(),
     getTraining(),
@@ -153,11 +158,11 @@ app.get('/api/dashboard', asyncRoute(async (req, res) => {
   });
 }));
 
-app.get('/api/documents', asyncRoute(async (req, res) => {
+apiRouter.get('/documents', asyncRoute(async (req, res) => {
   res.json(await getDocuments());
 }));
 
-app.post('/api/documents', asyncRoute(async (req, res) => {
+apiRouter.post('/documents', asyncRoute(async (req, res) => {
   if (!req.body.title || !req.body.title.trim()) {
     res.status(400).json({ error: 'Document title is required.' });
     return;
@@ -186,13 +191,26 @@ app.post('/api/documents', asyncRoute(async (req, res) => {
   res.status(201).json(document);
 }));
 
-app.get('/api/training', asyncRoute(async (req, res) => {
+apiRouter.get('/training', asyncRoute(async (req, res) => {
   res.json(await getTraining());
 }));
 
-app.get('/api/employees', asyncRoute(async (req, res) => {
+apiRouter.get('/employees', asyncRoute(async (req, res) => {
   res.json(await getEmployees());
 }));
+
+app.use('/api', apiRouter);
+app.use(`${appBasePath}/api`, apiRouter);
+
+app.use(appBasePath, express.static(clientDistPath));
+
+app.get('/', (req, res) => {
+  res.redirect(appBasePath);
+});
+
+app.get(`${appBasePath}/*`, (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
 
 app.use((error, req, res, next) => {
   console.error(error);
@@ -203,5 +221,5 @@ app.use((error, req, res, next) => {
 });
 
 app.listen(port, () => {
-  console.log(`BlueDoc API listening on http://127.0.0.1:${port}`);
+  console.log(`BlueDoc Express app listening on http://127.0.0.1:${port}${appBasePath}`);
 });

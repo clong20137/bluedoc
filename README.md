@@ -25,21 +25,27 @@ BlueDoc uses MySQL through `mysql2`. Update `.env` with your local credentials b
 
 The setup script creates the `bluedoc` database, creates the application tables, and seeds starter records for documents, training, employees, and activity.
 
-## IIS Deployment
+## Express + IIS Deployment
 
-Production builds are configured for an IIS application mounted at `/bluedoc`, with static files copied to:
+Production builds are configured for an Express backend mounted at `/bluedoc`. IIS should point the `/bluedoc` application to:
 
 ```text
 c:\inetpub\bluedoc
 ```
 
-Build the React app:
+Build the React app before starting the production Express process:
 
 ```bash
 npm run build
+npm start
 ```
 
-Copy the contents of `dist` into `c:\inetpub\bluedoc`.
+Express serves the built frontend from `dist` and exposes both API paths:
+
+```text
+http://127.0.0.1:4100/api
+http://127.0.0.1:4100/bluedoc/api
+```
 
 The production frontend uses:
 
@@ -48,12 +54,9 @@ VITE_APP_BASE_PATH=/bluedoc/
 VITE_API_BASE_URL=/bluedoc/api
 ```
 
-The generated `dist\web.config` includes:
+The generated `dist\web.config` routes all `/bluedoc` traffic through Express at `http://127.0.0.1:4100/bluedoc`.
 
-- A React fallback rule so refreshes work under `/bluedoc`
-- An optional reverse proxy rule from `/bluedoc/api/*` to the Express API at `http://127.0.0.1:4100/api/*`
-
-For the proxy rule, IIS needs URL Rewrite and Application Request Routing installed and proxying enabled. The Express API still needs to run as a Node process on the server with access to MySQL.
+IIS needs URL Rewrite and Application Request Routing installed with proxying enabled. The Express process still needs to run on the server with access to MySQL.
 
 ## Current Workflows
 
