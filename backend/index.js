@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const mammoth = require('mammoth');
 const multer = require('multer');
 const path = require('path');
+const xlsx = require('xlsx');
 const { pingDatabase, query } = require('./db');
 const { initializeDatabase } = require('./initializeDatabase');
 const {
@@ -74,6 +76,39 @@ function formatDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function wrapPreviewHtml(title, body) {
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body { margin: 0; background: #f5f7fb; color: #172033; font-family: Georgia, "Times New Roman", serif; }
+    main { max-width: 960px; min-height: calc(100vh - 64px); margin: 32px auto; padding: 48px; background: #fff; border: 1px solid #d6deeb; box-shadow: 0 18px 45px rgba(23, 32, 51, .08); }
+    h1, h2, h3 { font-family: Arial, sans-serif; }
+    img { max-width: 100%; }
+    table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 13px; }
+    th, td { border: 1px solid #d6deeb; padding: 8px; vertical-align: top; }
+    th { background: #eef3f9; text-align: left; }
+    p { line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <main>${body}</main>
+</body>
+</html>`;
+}
+
 function toDocument(row) {
   return {
     id: row.id,
@@ -94,6 +129,7 @@ function toDocument(row) {
     publishedBy: row.published_by,
     downloadUrl: row.file_path ? `/documents/${row.id}/download` : null,
     viewUrl: row.file_path ? `/documents/${row.id}/view` : null,
+    previewUrl: row.file_path ? `/documents/${row.id}/preview` : null,
     acknowledgements: row.acknowledgements,
     totalAssigned: row.total_assigned
   };
@@ -428,6 +464,57 @@ apiRouter.get('/documents/:id/view', asyncRoute(async (req, res) => {
   res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.original_file_name || document.title)}"`);
   res.sendFile(path.resolve(document.file_path));
+}));
+
+apiRouter.get('/documents/:id/preview', asyncRoute(async (req, res) => {
+  const rows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = rows[0];
+
+  if (!document?.file_path || !fs.existsSync(document.file_path)) {
+    res.status(404).send(wrapPreviewHtml('Document not found', '<h1>Document file not found.</h1>'));
+    return;
+  }
+
+  const fileName = String(document.original_file_name || '').toLowerCase();
+  const filePath = path.resolve(document.file_path);
+  const title = document.title || document.original_file_name || 'BlueDoc preview';
+
+  if (fileName.endsWith('.pdf')) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.original_file_name || title)}"`);
+    res.sendFile(filePath);
+    return;
+  }
+
+  if (fileName.endsWith('.docx')) {
+    const result = await mammoth.convertToHtml({ path: filePath });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(wrapPreviewHtml(title, result.value || '<p>This Word document did not contain previewable text.</p>'));
+    return;
+  }
+
+  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+    const workbook = xlsx.readFile(filePath);
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
+    const body = sheet
+      ? `<h1>${escapeHtml(firstSheetName)}</h1>${xlsx.utils.sheet_to_html(sheet)}`
+      : '<p>This spreadsheet did not contain previewable sheets.</p>';
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(wrapPreviewHtml(title, body));
+    return;
+  }
+
+  if (fileName.endsWith('.txt') || document.mime_type === 'text/plain') {
+    const text = fs.readFileSync(filePath, 'utf8');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(wrapPreviewHtml(title, `<pre>${escapeHtml(text)}</pre>`));
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(415).send(wrapPreviewHtml(title, '<h1>Preview is not available for this file type.</h1><p>Download the file to view it locally.</p>'));
 }));
 
 apiRouter.delete('/documents/:id', asyncRoute(async (req, res) => {
