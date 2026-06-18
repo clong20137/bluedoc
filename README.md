@@ -126,6 +126,7 @@ Use `iis-root-web.config` as the template for that file. It proxies `/api/*` to 
 
 - Organization overview with compliance metrics
 - Controlled documents with file upload, metadata editing, file replacement, download, publishing, and deletion
+- Document viewer supports inline PDF previews and Office viewer embeds for publicly reachable Word/Excel/PowerPoint URLs, with download fallback
 - Training assignments connected to required documents
 - Agency users sourced from Shield's `users` table
 - Express API endpoints for documents, training, employees, and activity

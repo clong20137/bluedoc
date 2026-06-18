@@ -7,6 +7,7 @@ import {
   Download,
   Edit3,
   Trash2,
+  Eye,
   ClipboardCheck,
   FileCheck2,
   FileText,
@@ -37,6 +38,14 @@ function classNames(...parts) {
 
 function apiUrl(path) {
   return `${API_BASE_URL}${path}`;
+}
+
+function absoluteApiUrl(path) {
+  try {
+    return new URL(apiUrl(path), window.location.href).toString();
+  } catch {
+    return apiUrl(path);
+  }
 }
 
 function apiFetch(path, options = {}) {
@@ -72,6 +81,7 @@ function App() {
     file: null
   });
   const [editingDocumentId, setEditingDocumentId] = useState(null);
+  const [viewingDocument, setViewingDocument] = useState(null);
 
   async function loadSession() {
     setLoading(true);
@@ -227,6 +237,11 @@ function App() {
 
     await apiFetch(`/documents/${document.id}`, { method: 'DELETE' });
     await loadDashboard();
+  }
+
+  function viewDocument(document) {
+    setViewingDocument(document);
+    setActiveTab('documents');
   }
 
   async function signInWithShield(event) {
@@ -465,6 +480,7 @@ function App() {
               setForm={setDocumentForm}
               editingDocumentId={editingDocumentId}
               onEdit={editDocument}
+              onView={viewDocument}
               onPublish={publishDocument}
               onDelete={deleteDocument}
               onSubmit={addDocument}
@@ -481,6 +497,8 @@ function App() {
                   file: null
                 });
               }}
+              viewingDocument={viewingDocument}
+              onCloseViewer={() => setViewingDocument(null)}
             />
           )}
           {activeTab === 'training' && <Training training={dashboard.training} />}
@@ -547,9 +565,26 @@ function Overview({ dashboard }) {
   );
 }
 
-function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPublish, onDelete, onSubmit, onCancel }) {
+function Documents({
+  documents,
+  form,
+  setForm,
+  editingDocumentId,
+  onEdit,
+  onView,
+  onPublish,
+  onDelete,
+  onSubmit,
+  onCancel,
+  viewingDocument,
+  onCloseViewer
+}) {
   return (
-    <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
+    <section className="space-y-6">
+      {viewingDocument && (
+        <DocumentViewer document={viewingDocument} onClose={onCloseViewer} />
+      )}
+      <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="rounded border border-line bg-white shadow-panel">
         <div className="border-b border-line px-5 py-4">
           <h3 className="text-lg font-bold">Document library</h3>
@@ -584,6 +619,16 @@ function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPubl
                   </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap gap-2">
+                      {document.downloadUrl && (
+                        <button
+                          type="button"
+                          onClick={() => onView(document)}
+                          className="inline-flex h-8 items-center gap-1 rounded border border-line px-2 text-xs font-semibold text-slategray hover:text-harbor"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View
+                        </button>
+                      )}
                       {document.downloadUrl && (
                         <a
                           href={apiUrl(document.downloadUrl)}
@@ -713,7 +758,61 @@ function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPubl
           )}
         </div>
       </form>
+      </div>
     </section>
+  );
+}
+
+function DocumentViewer({ document, onClose }) {
+  const viewUrl = document.viewUrl ? absoluteApiUrl(document.viewUrl) : '';
+  const downloadUrl = document.downloadUrl ? absoluteApiUrl(document.downloadUrl) : '';
+  const isPdf = document.mimeType === 'application/pdf' || document.originalFileName?.toLowerCase().endsWith('.pdf');
+  const isOffice = [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ].includes(document.mimeType);
+  const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
+
+  return (
+    <div className="rounded border border-line bg-white shadow-panel">
+      <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-bold">{document.title}</h3>
+          <p className="text-sm text-slategray">{document.originalFileName}</p>
+        </div>
+        <div className="flex gap-2">
+          {downloadUrl && (
+            <a href={downloadUrl} className="inline-flex h-9 items-center gap-2 rounded border border-line px-3 text-sm font-semibold text-slategray hover:text-harbor">
+              <Download className="h-4 w-4" />
+              Download
+            </a>
+          )}
+          <button type="button" onClick={onClose} className="h-9 rounded border border-line px-3 text-sm font-semibold text-slategray hover:text-ink">
+            Close
+          </button>
+        </div>
+      </div>
+      <div className="h-[70vh] bg-field">
+        {isPdf && (
+          <iframe title={document.title} src={viewUrl} className="h-full w-full border-0" />
+        )}
+        {!isPdf && isOffice && (
+          <iframe title={document.title} src={officeViewerUrl} className="h-full w-full border-0" />
+        )}
+        {!isPdf && !isOffice && (
+          <div className="grid h-full place-items-center p-6 text-center">
+            <div>
+              <p className="font-semibold">Preview is not available for this file type.</p>
+              <p className="mt-2 text-sm text-slategray">Download the file to view it locally.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -733,9 +832,43 @@ function Training({ training }) {
 }
 
 function People({ employees }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+  const totalPages = Math.max(1, Math.ceil(employees.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleEmployees = employees.slice(pageStart, pageStart + pageSize);
+
   return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      {employees.map((employee) => (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-3 rounded border border-line bg-white p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-bold">Agency users</h3>
+          <p className="text-sm text-slategray">
+            Showing {employees.length ? pageStart + 1 : 0}-{Math.min(pageStart + pageSize, employees.length)} of {employees.length}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            disabled={currentPage === 1}
+            className="h-9 rounded border border-line px-3 text-sm font-semibold text-slategray disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+            disabled={currentPage === totalPages}
+            className="h-9 rounded border border-line px-3 text-sm font-semibold text-slategray disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+      {visibleEmployees.map((employee) => (
         <div key={employee.id} className="rounded border border-line bg-white p-5 shadow-panel">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -751,6 +884,7 @@ function People({ employees }) {
           <p className="mt-2 text-sm font-semibold">Training compliance pending assignment data</p>
         </div>
       ))}
+      </div>
     </section>
   );
 }

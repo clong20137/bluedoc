@@ -89,6 +89,7 @@ function toDocument(row) {
     publishedAt: row.published_at,
     publishedBy: row.published_by,
     downloadUrl: row.file_path ? `/documents/${row.id}/download` : null,
+    viewUrl: row.file_path ? `/documents/${row.id}/view` : null,
     acknowledgements: row.acknowledgements,
     totalAssigned: row.total_assigned
   };
@@ -409,6 +410,20 @@ apiRouter.get('/documents/:id/download', asyncRoute(async (req, res) => {
   }
 
   res.download(document.file_path, document.original_file_name || `${document.title}.pdf`);
+}));
+
+apiRouter.get('/documents/:id/view', asyncRoute(async (req, res) => {
+  const rows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = rows[0];
+
+  if (!document?.file_path || !fs.existsSync(document.file_path)) {
+    res.status(404).json({ error: 'Document file not found.' });
+    return;
+  }
+
+  res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(document.original_file_name || document.title)}"`);
+  res.sendFile(path.resolve(document.file_path));
 }));
 
 apiRouter.delete('/documents/:id', asyncRoute(async (req, res) => {
