@@ -1,5 +1,5 @@
 {
-  "watch": ["server"],
+  "watch": ["backend"],
   "ext": "js,json",
-  "ignore": ["*.log", "dist", "node_modules", "src", "server/node_modules"]
+  "ignore": ["*.log", "dist", "node_modules", "frontend", "backend/node_modules"]
 }

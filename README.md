@@ -13,7 +13,7 @@ BlueDoc is a full-stack starter for document control, training assignments, poli
 Start the Express backend like Shield:
 
 ```bash
-cd server
+cd backend
 npm install
 copy .env.example .env
 npm run db:setup
@@ -25,14 +25,16 @@ In another terminal, start the React frontend:
 ```bash
 cd ..
 npm install
-npm run dev:client
+cd frontend
+npm install
+npm run dev
 ```
 
 The client runs at `http://127.0.0.1:5173` and proxies API requests to `http://127.0.0.1:4100`.
 
 ## MySQL
 
-BlueDoc uses MySQL through `mysql2`. Update `server\.env` with your local credentials before running `npm run db:setup` from the `server` folder.
+BlueDoc uses MySQL through `mysql2`. Update `backend\.env` with your local credentials before running `npm run db:setup` from the `backend` folder.
 
 The setup script creates the `bluedoc` database, creates the application tables, and seeds starter records for documents, training, employees, and activity.
 
@@ -47,19 +49,20 @@ c:\inetpub\wwwroot\bluedoc
 Build the frontend from the project root:
 
 ```bash
+cd frontend
 npm install
 npm run build
 ```
 
-Run the backend from the `server` folder:
+Run the backend from the `backend` folder:
 
 ```bash
-cd server
+cd ..\backend
 npm install
 npm start
 ```
 
-Express serves the built frontend from the project root `dist` folder and exposes both API paths:
+Express serves the built frontend from `frontend\dist` and exposes both API paths:
 
 ```text
 http://127.0.0.1:4100/api
@@ -75,14 +78,15 @@ VITE_API_BASE_URL=/bluedoc/api
 
 The generated `dist\web.config` routes all `/bluedoc` traffic through Express at `http://127.0.0.1:4100/bluedoc`.
 
-Recommended IIS setup:
+Recommended IIS setup, matching Shield:
 
-- Run Express separately on `127.0.0.1:4100`.
-- Make `c:\inetpub\wwwroot\bluedoc` an IIS Application with alias `bluedoc`.
-- Put the root `web.config` in `c:\inetpub\wwwroot\bluedoc\web.config`.
-- The IIS rule proxies `/bluedoc/*` to `http://127.0.0.1:4100/bluedoc/*`.
+- Run the Express backend separately on `127.0.0.1:4100`.
+- Build the frontend from `frontend`.
+- Copy the contents of `frontend\dist` into `c:\inetpub\wwwroot\bluedoc`.
+- The generated `frontend\dist\web.config` is the same kind of React fallback config Shield uses.
+- Configure IIS to proxy `/api/*` to `http://127.0.0.1:4100/api/*` at the site level, or keep using Vite's dev proxy during development.
 
-IIS needs URL Rewrite and Application Request Routing installed with proxying enabled. Express needs access to MySQL.
+IIS needs Default Document enabled for `index.html`. URL Rewrite is only needed for React deep-link fallback and API proxy rules. Application Request Routing is needed if IIS proxies `/api` to Express. Express needs access to MySQL.
 
 ## Current Workflows
 

@@ -6,7 +6,7 @@ const { pingDatabase, query } = require('./db');
 const app = express();
 const port = process.env.PORT || 4100;
 const appBasePath = process.env.APP_BASE_PATH || '/bluedoc';
-const clientDistPath = path.join(__dirname, '..', 'dist');
+const clientDistPath = path.join(__dirname, '..', 'frontend', 'dist');
 
 app.use(cors());
 app.use(express.json());
