@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   BookOpenCheck,
-  CheckCircle2,
   ClipboardCheck,
   FileCheck2,
   FileText,
@@ -17,6 +16,8 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
 const tabs = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'documents', label: 'Documents', icon: FileText },
@@ -26,6 +27,10 @@ const tabs = [
 
 function classNames(...parts) {
   return parts.filter(Boolean).join(' ');
+}
+
+function apiUrl(path) {
+  return `${API_BASE_URL}${path}`;
 }
 
 function App() {
@@ -45,7 +50,7 @@ function App() {
     setError('');
 
     try {
-      const response = await fetch('/api/dashboard');
+      const response = await fetch(apiUrl('/dashboard'));
 
       if (!response.ok) {
         throw new Error('BlueDoc could not connect to the database.');
@@ -76,7 +81,7 @@ function App() {
     event.preventDefault();
     if (!documentForm.title.trim()) return;
 
-    await fetch('/api/documents', {
+    await fetch(apiUrl('/documents'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(documentForm)
@@ -309,7 +314,7 @@ function Documents({ documents, form, setForm, onSubmit }) {
                   <td className="px-5 py-4">
                     <p className="font-semibold">{document.title}</p>
                     <p className="mt-1 text-sm text-slategray">
-                      {document.category} · v{document.version} · review {document.nextReview}
+                      {document.category} - v{document.version} - review {document.nextReview}
                     </p>
                   </td>
                   <td className="px-5 py-4 text-sm text-slategray">{document.owner}</td>
@@ -391,7 +396,7 @@ function People({ employees }) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-lg font-bold">{employee.name}</h3>
-              <p className="mt-1 text-sm text-slategray">{employee.role} · {employee.unit}</p>
+              <p className="mt-1 text-sm text-slategray">{employee.role} - {employee.unit}</p>
             </div>
             <div className={classNames('rounded px-2.5 py-1 text-xs font-bold', employee.overdue ? 'bg-rose/10 text-rose' : 'bg-mint/10 text-mint')}>
               {employee.overdue ? `${employee.overdue} overdue` : 'Current'}
@@ -413,7 +418,7 @@ function TrainingRow({ item }) {
           <BookOpenCheck className="h-4 w-4 text-harbor" />
           <h4 className="font-semibold">{item.name}</h4>
         </div>
-        <p className="mt-1 text-sm text-slategray">{item.documentTitle} · {item.mode} · due {item.dueDate}</p>
+        <p className="mt-1 text-sm text-slategray">{item.documentTitle} - {item.mode} - due {item.dueDate}</p>
         <ProgressBar value={item.percentComplete} />
       </div>
       <div className="text-left md:text-right">
