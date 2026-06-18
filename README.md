@@ -90,6 +90,14 @@ Recommended IIS setup, matching Shield:
 
 IIS needs Default Document enabled for `index.html`. URL Rewrite is only needed for React deep-link fallback and API proxy rules. Application Request Routing is needed if IIS proxies `/api` to Express. Express needs access to MySQL.
 
+For Shield-style IIS hosting, the frontend folder at `c:\inetpub\wwwroot\bluedoc` handles React routes only. API requests go to `/api`, so IIS needs a site-level rule in:
+
+```text
+c:\inetpub\wwwroot\web.config
+```
+
+Use `iis-root-web.config` as the template for that file. It proxies `/api/*` to the Express backend at `http://127.0.0.1:4100/api/*`.
+
 ## Current Workflows
 
 - Organization overview with compliance metrics
