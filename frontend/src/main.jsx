@@ -74,8 +74,6 @@ function App() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [sessionTimeLeft, setSessionTimeLeft] = useState('');
-  const [sessionExpiringSoon, setSessionExpiringSoon] = useState(false);
   const [documentError, setDocumentError] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
@@ -110,8 +108,6 @@ function App() {
 
       const payload = await response.json();
       setSession(payload);
-      setSessionExpiringSoon(false);
-      setSessionTimeLeft('');
       return payload;
     } catch (requestError) {
       setError(requestError.message);
@@ -153,39 +149,6 @@ function App() {
       }
     });
   }, []);
-
-  useEffect(() => {
-    if (!session?.authenticated || !session.account?.sessionExpiresAt) {
-      setSessionTimeLeft('');
-      setSessionExpiringSoon(false);
-      return;
-    }
-
-    const updateSessionTimer = () => {
-      const expiresAt = Date.parse(session.account.sessionExpiresAt);
-      if (!Number.isFinite(expiresAt)) {
-        setSessionTimeLeft('');
-        return;
-      }
-
-      const remainingMs = expiresAt - Date.now();
-      if (remainingMs <= 0) {
-        signOut();
-        return;
-      }
-
-      const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      setSessionTimeLeft(`${minutes}:${String(seconds).padStart(2, '0')}`);
-      setSessionExpiringSoon(remainingMs <= 300000);
-    };
-
-    updateSessionTimer();
-    const interval = setInterval(updateSessionTimer, 1000);
-
-    return () => clearInterval(interval);
-  }, [session?.authenticated, session?.account?.sessionExpiresAt]);
 
   const filteredDocuments = useMemo(() => {
     if (!dashboard) return [];
@@ -405,8 +368,6 @@ function App() {
     setDashboard(null);
     setSession({ authenticated: false, signInUrl: SHIELD_SIGN_IN_URL });
     setActiveTab('overview');
-    setSessionTimeLeft('');
-    setSessionExpiringSoon(false);
   }
 
   if (loading) {
@@ -526,11 +487,6 @@ function App() {
             <p className="text-xs text-slategray">{session.account.email}</p>
             {session.account.requiresMfa && (
               <p className="mt-1 text-xs font-semibold text-slategray">MFA account</p>
-            )}
-            {sessionTimeLeft && (
-              <p className={classNames('mt-1 text-xs font-semibold', sessionExpiringSoon ? 'text-rose' : 'text-slategray')}>
-                Session expires in {sessionTimeLeft}
-              </p>
             )}
             <button
               type="button"
@@ -1093,8 +1049,7 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
           <button
             type="button"
             onClick={() => setViewerMode('edit')}
-            disabled={contentState.loading || !contentState.contentHtml}
-            className={classNames('inline-flex h-9 items-center gap-2 rounded border px-3 text-sm font-semibold disabled:opacity-50', viewerMode === 'edit' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
+            className={classNames('inline-flex h-9 items-center gap-2 rounded border px-3 text-sm font-semibold', viewerMode === 'edit' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
           >
             <Edit3 className="h-4 w-4" />
             Edit
@@ -1102,7 +1057,7 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
           <button
             type="button"
             onClick={() => setViewerMode('changes')}
-            disabled={contentState.loading || !contentState.contentHtml}
+            disabled={contentState.loading}
             className={classNames('h-9 rounded border px-3 text-sm font-semibold disabled:opacity-50', viewerMode === 'changes' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
           >
             Changes
@@ -1141,7 +1096,7 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
               contentEditable
               suppressContentEditableWarning
               className="min-h-[56vh] rounded border border-line bg-white p-5 text-sm leading-7 outline-none focus:border-signal focus:ring-2 focus:ring-signal/20"
-              dangerouslySetInnerHTML={{ __html: editorHtml || '<p></p>' }}
+              dangerouslySetInnerHTML={{ __html: editorHtml || '<p>Start typing document content here.</p>' }}
             />
           </div>
         ) : viewerMode === 'changes' ? (

@@ -527,11 +527,33 @@ apiRouter.post('/documents/:id/publish', asyncRoute(async (req, res) => {
 
 apiRouter.get('/documents/:id/content', asyncRoute(async (req, res) => {
   const rows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
-  const document = rows[0];
+  let document = rows[0];
 
   if (!document) {
     res.status(404).json({ error: 'Document not found.' });
     return;
+  }
+
+  if (!document.content_html && document.file_path && fs.existsSync(document.file_path)) {
+    const contentHtml = await extractEditableHtml(document.file_path, document.original_file_name, document.mime_type);
+
+    if (contentHtml) {
+      await query(`
+        UPDATE documents
+        SET content_html = :contentHtml,
+          baseline_content_html = COALESCE(baseline_content_html, :contentHtml),
+          content_updated_by = COALESCE(content_updated_by, :updatedBy),
+          content_updated_at = COALESCE(content_updated_at, CURRENT_TIMESTAMP)
+        WHERE id = :id
+      `, {
+        id: req.params.id,
+        contentHtml,
+        updatedBy: req.shieldAccount?.displayName || req.shieldAccount?.email || 'BlueDoc'
+      });
+
+      const refreshedRows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+      document = refreshedRows[0];
+    }
   }
 
   res.json({
