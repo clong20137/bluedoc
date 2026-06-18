@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Download,
   Edit3,
+  Trash2,
   ClipboardCheck,
   FileCheck2,
   FileText,
@@ -217,6 +218,14 @@ function App() {
 
   async function publishDocument(documentId) {
     await apiFetch(`/documents/${documentId}/publish`, { method: 'POST' });
+    await loadDashboard();
+  }
+
+  async function deleteDocument(document) {
+    const confirmed = window.confirm(`Delete "${document.title}" from BlueDoc? This removes the stored file and version history.`);
+    if (!confirmed) return;
+
+    await apiFetch(`/documents/${document.id}`, { method: 'DELETE' });
     await loadDashboard();
   }
 
@@ -457,6 +466,7 @@ function App() {
               editingDocumentId={editingDocumentId}
               onEdit={editDocument}
               onPublish={publishDocument}
+              onDelete={deleteDocument}
               onSubmit={addDocument}
               onCancel={() => {
                 setEditingDocumentId(null);
@@ -537,7 +547,7 @@ function Overview({ dashboard }) {
   );
 }
 
-function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPublish, onSubmit, onCancel }) {
+function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPublish, onDelete, onSubmit, onCancel }) {
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="rounded border border-line bg-white shadow-panel">
@@ -598,6 +608,14 @@ function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPubl
                       >
                         <FileCheck2 className="h-3.5 w-3.5" />
                         Publish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(document)}
+                        className="inline-flex h-8 items-center gap-1 rounded border border-rose/30 bg-rose/10 px-2 text-xs font-semibold text-rose hover:bg-rose hover:text-white"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
                       </button>
                     </div>
                   </td>
@@ -723,13 +741,14 @@ function People({ employees }) {
             <div>
               <h3 className="text-lg font-bold">{employee.name}</h3>
               <p className="mt-1 text-sm text-slategray">{employee.role} - {employee.unit}</p>
+              <p className="mt-1 text-xs text-slategray">{employee.email}</p>
             </div>
-            <div className={classNames('rounded px-2.5 py-1 text-xs font-bold', employee.overdue ? 'bg-rose/10 text-rose' : 'bg-mint/10 text-mint')}>
-              {employee.overdue ? `${employee.overdue} overdue` : 'Current'}
+            <div className={classNames('rounded px-2.5 py-1 text-xs font-bold', employee.isActive ? 'bg-mint/10 text-mint' : 'bg-rose/10 text-rose')}>
+              {employee.isActive ? 'Active' : 'Inactive'}
             </div>
           </div>
           <ProgressBar value={employee.compliance} />
-          <p className="mt-2 text-sm font-semibold">{employee.compliance}% complete</p>
+          <p className="mt-2 text-sm font-semibold">Training compliance pending assignment data</p>
         </div>
       ))}
     </section>

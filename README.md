@@ -125,7 +125,7 @@ Use `iis-root-web.config` as the template for that file. It proxies `/api/*` to 
 ## Current Workflows
 
 - Organization overview with compliance metrics
-- Controlled documents with file upload, metadata editing, file replacement, download, and publish status
+- Controlled documents with file upload, metadata editing, file replacement, download, publishing, and deletion
 - Training assignments connected to required documents
-- Staff compliance table with acknowledgement progress
+- Agency users sourced from Shield's `users` table
 - Express API endpoints for documents, training, employees, and activity

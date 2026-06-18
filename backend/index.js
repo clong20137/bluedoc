@@ -6,6 +6,7 @@ const path = require('path');
 const { pingDatabase, query } = require('./db');
 const {
   getShieldAccountForRequest,
+  getShieldWorkspaceUsers,
   loginWithShieldCredentials,
   logoutShieldSession,
   requireShieldSession
@@ -107,17 +108,6 @@ function toTraining(row) {
   };
 }
 
-function toEmployee(row) {
-  return {
-    id: row.id,
-    name: row.name,
-    role: row.role,
-    unit: row.unit,
-    compliance: row.compliance,
-    overdue: row.overdue
-  };
-}
-
 function toActivity(row) {
   return {
     id: row.id,
@@ -135,6 +125,21 @@ function asyncRoute(handler) {
       next(error);
     }
   };
+}
+
+function removeStoredFile(filePath) {
+  if (!filePath) return;
+
+  const resolvedPath = path.resolve(filePath);
+  const resolvedUploadsRoot = path.resolve(uploadsRoot);
+
+  if (!resolvedPath.startsWith(resolvedUploadsRoot)) {
+    return;
+  }
+
+  if (fs.existsSync(resolvedPath)) {
+    fs.unlinkSync(resolvedPath);
+  }
 }
 
 async function getDocuments() {
@@ -158,16 +163,6 @@ async function getTraining() {
   `);
 
   return rows.map(toTraining);
-}
-
-async function getEmployees() {
-  const rows = await query(`
-    SELECT *
-    FROM employees
-    ORDER BY name ASC
-  `);
-
-  return rows.map(toEmployee);
 }
 
 async function getActivity() {
@@ -215,7 +210,7 @@ apiRouter.get('/dashboard', asyncRoute(async (req, res) => {
   const [documents, training, employees, activity] = await Promise.all([
     getDocuments(),
     getTraining(),
-    getEmployees(),
+    getShieldWorkspaceUsers(),
     getActivity()
   ]);
 
@@ -416,12 +411,37 @@ apiRouter.get('/documents/:id/download', asyncRoute(async (req, res) => {
   res.download(document.file_path, document.original_file_name || `${document.title}.pdf`);
 }));
 
+apiRouter.delete('/documents/:id', asyncRoute(async (req, res) => {
+  const documents = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = documents[0];
+
+  if (!document) {
+    res.status(404).json({ error: 'Document not found.' });
+    return;
+  }
+
+  const versions = await query('SELECT file_path FROM document_versions WHERE document_id = :id', { id: req.params.id });
+
+  await query('DELETE FROM documents WHERE id = :id', { id: req.params.id });
+
+  const pathsToRemove = new Set([
+    document.file_path,
+    ...versions.map((version) => version.file_path)
+  ].filter(Boolean));
+
+  for (const filePath of pathsToRemove) {
+    removeStoredFile(filePath);
+  }
+
+  res.json({ deleted: true, id: req.params.id });
+}));
+
 apiRouter.get('/training', asyncRoute(async (req, res) => {
   res.json(await getTraining());
 }));
 
 apiRouter.get('/employees', asyncRoute(async (req, res) => {
-  res.json(await getEmployees());
+  res.json(await getShieldWorkspaceUsers());
 }));
 
 app.use('/api', apiRouter);
