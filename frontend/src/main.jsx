@@ -14,11 +14,14 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Upload,
   Search,
   ShieldCheck,
-  Users
+  Users,
+  X
 } from 'lucide-react';
 import './styles.css';
 
@@ -73,6 +76,8 @@ function App() {
   const [sessionTimeLeft, setSessionTimeLeft] = useState('');
   const [sessionExpiringSoon, setSessionExpiringSoon] = useState(false);
   const [documentError, setDocumentError] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [documentForm, setDocumentForm] = useState({
     title: '',
     category: 'Policy',
@@ -262,6 +267,7 @@ function App() {
         file: null
       });
       setEditingDocumentId(null);
+      setIsDocumentModalOpen(false);
       await loadDashboard();
       setActiveTab('documents');
     } catch (requestError) {
@@ -282,6 +288,41 @@ function App() {
       file: null
     });
     setActiveTab('documents');
+    setDocumentError('');
+    setIsDocumentModalOpen(true);
+  }
+
+  function startNewDocument() {
+    setEditingDocumentId(null);
+    setDocumentError('');
+    setDocumentForm({
+      title: '',
+      category: 'Policy',
+      owner: '',
+      description: '',
+      version: '1.0',
+      nextReview: '2026-12-31',
+      requiredTraining: 'None',
+      file: null
+    });
+    setIsDocumentModalOpen(true);
+    setActiveTab('documents');
+  }
+
+  function closeDocumentModal() {
+    setEditingDocumentId(null);
+    setDocumentError('');
+    setIsDocumentModalOpen(false);
+    setDocumentForm({
+      title: '',
+      category: 'Policy',
+      owner: '',
+      description: '',
+      version: '1.0',
+      nextReview: '2026-12-31',
+      requiredTraining: 'None',
+      file: null
+    });
   }
 
   async function publishDocument(documentId) {
@@ -443,18 +484,39 @@ function App() {
 
   return (
     <div className="min-h-screen bg-field text-ink">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-line bg-white px-5 py-6 lg:block">
-        <div className="flex items-center gap-3">
+      <aside className={classNames(
+        'fixed inset-y-0 left-0 z-20 hidden border-r border-line bg-white py-6 transition-all duration-200 lg:block',
+        isSidebarCollapsed ? 'w-20 px-3' : 'w-72 px-5'
+      )}>
+        <div className={classNames('flex items-center', isSidebarCollapsed ? 'justify-center' : 'gap-3')}>
           <div className="grid h-10 w-10 place-items-center rounded bg-harbor text-white">
             <ShieldCheck className="h-6 w-6" />
           </div>
+          {!isSidebarCollapsed && (
           <div>
             <h1 className="text-xl font-bold leading-tight">BlueDoc</h1>
             <p className="text-xs font-medium uppercase tracking-wide text-slategray">Command library</p>
           </div>
+          )}
         </div>
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed((value) => !value)}
+          className={classNames(
+            'mt-5 inline-flex h-9 items-center justify-center rounded border border-line bg-field text-sm font-semibold text-slategray transition hover:text-harbor',
+            isSidebarCollapsed ? 'w-full' : 'w-full gap-2'
+          )}
+          title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+        >
+          {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          {!isSidebarCollapsed && 'Collapse'}
+        </button>
         {session?.account && (
-          <div className="mt-6 rounded border border-line bg-white p-3 text-sm">
+          <div className={classNames('mt-6 rounded border border-line bg-white text-sm', isSidebarCollapsed ? 'p-2 text-center' : 'p-3')}>
+            {isSidebarCollapsed ? (
+              <p className="text-sm font-bold">{session.account.displayName?.slice(0, 1) || 'U'}</p>
+            ) : (
+            <>
             <p className="font-semibold">{session.account.displayName}</p>
             <p className="text-xs text-slategray">{session.account.email}</p>
             {session.account.requiresMfa && (
@@ -474,6 +536,8 @@ function App() {
               <LogOut className="h-3.5 w-3.5" />
               Sign out
             </button>
+            </>
+            )}
           </div>
         )}
 
@@ -492,20 +556,26 @@ function App() {
                 title={tab.label}
               >
                 <Icon className="h-4 w-4" />
-                {tab.label}
+                {!isSidebarCollapsed && tab.label}
               </button>
             );
           })}
         </nav>
 
-        <div className="mt-10 rounded border border-line bg-field p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slategray">Compliance pulse</p>
-          <p className="mt-3 text-3xl font-bold">{dashboard.metrics.compliance}%</p>
-          <p className="mt-1 text-sm text-slategray">Training completions across assigned policies and procedures.</p>
+        <div className={classNames('mt-10 rounded border border-line bg-field', isSidebarCollapsed ? 'p-2 text-center' : 'p-4')}>
+          {isSidebarCollapsed ? (
+            <p className="text-xl font-bold">{dashboard.metrics.compliance}%</p>
+          ) : (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slategray">Compliance pulse</p>
+              <p className="mt-3 text-3xl font-bold">{dashboard.metrics.compliance}%</p>
+              <p className="mt-1 text-sm text-slategray">Training completions across assigned policies and procedures.</p>
+            </>
+          )}
         </div>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className={classNames('transition-all duration-200', isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72')}>
         <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-4 py-4 backdrop-blur sm:px-7">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
@@ -524,7 +594,7 @@ function App() {
               </label>
               <button
                 type="button"
-                onClick={() => setActiveTab('documents')}
+                onClick={startNewDocument}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink"
               >
                 <Plus className="h-4 w-4" />
@@ -576,19 +646,9 @@ function App() {
               onDelete={deleteDocument}
               onSubmit={addDocument}
               documentError={documentError}
-              onCancel={() => {
-                setEditingDocumentId(null);
-                setDocumentForm({
-                  title: '',
-                  category: 'Policy',
-                  owner: '',
-                  description: '',
-                  version: '1.0',
-                  nextReview: '2026-12-31',
-                  requiredTraining: 'None',
-                  file: null
-                });
-              }}
+              isDocumentModalOpen={isDocumentModalOpen}
+              onNewDocument={startNewDocument}
+              onCancel={closeDocumentModal}
               viewingDocument={viewingDocument}
               onReplaceFile={replaceViewedDocument}
               onCloseViewer={() => setViewingDocument(null)}
@@ -672,7 +732,9 @@ function Documents({
   onCancel,
   viewingDocument,
   onCloseViewer,
-  onReplaceFile
+  onReplaceFile,
+  isDocumentModalOpen,
+  onNewDocument
 }) {
   return (
     <section className="space-y-6">
@@ -683,10 +745,17 @@ function Documents({
           onReplaceFile={onReplaceFile}
         />
       )}
-      <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="rounded border border-line bg-white shadow-panel">
-        <div className="border-b border-line px-5 py-4">
+        <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-lg font-bold">Document library</h3>
+          <button
+            type="button"
+            onClick={onNewDocument}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded bg-harbor px-3 text-sm font-semibold text-white transition hover:bg-ink"
+          >
+            <Plus className="h-4 w-4" />
+            New document
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-line">
@@ -770,9 +839,36 @@ function Documents({
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="rounded border border-line bg-white p-5 shadow-panel">
-        <h3 className="text-lg font-bold">{editingDocumentId ? 'Edit controlled document' : 'Upload controlled document'}</h3>
-        <div className="mt-5 space-y-4">
+      {isDocumentModalOpen && (
+        <DocumentFormModal
+          form={form}
+          setForm={setForm}
+          editingDocumentId={editingDocumentId}
+          documentError={documentError}
+          onSubmit={onSubmit}
+          onCancel={onCancel}
+        />
+      )}
+    </section>
+  );
+}
+
+function DocumentFormModal({ form, setForm, editingDocumentId, documentError, onSubmit, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-ink/40 px-4 py-6">
+      <form onSubmit={onSubmit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded border border-line bg-white p-5 shadow-panel">
+        <div className="flex items-center justify-between gap-4 border-b border-line pb-4">
+          <h3 className="text-lg font-bold">{editingDocumentId ? 'Edit controlled document' : 'Upload controlled document'}</h3>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="grid h-9 w-9 place-items-center rounded border border-line text-slategray transition hover:text-ink"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Title">
             <input
               value={form.title}
@@ -801,31 +897,6 @@ function Documents({
               placeholder="Division or unit"
             />
           </Field>
-          <Field label="Description">
-            <textarea
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              className="min-h-24 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-signal focus:ring-2 focus:ring-signal/20"
-              placeholder="Purpose, scope, or review notes"
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Version">
-              <input
-                value={form.version}
-                onChange={(event) => setForm((current) => ({ ...current, version: event.target.value }))}
-                className="input"
-              />
-            </Field>
-            <Field label="Review date">
-              <input
-                type="date"
-                value={form.nextReview}
-                onChange={(event) => setForm((current) => ({ ...current, nextReview: event.target.value }))}
-                className="input"
-              />
-            </Field>
-          </div>
           <Field label="Required training">
             <input
               value={form.requiredTraining}
@@ -834,32 +905,58 @@ function Documents({
               placeholder="None"
             />
           </Field>
-          <Field label={editingDocumentId ? 'Replace file' : 'Document file'}>
+          <Field label="Version">
             <input
-              type="file"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-              onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] || null }))}
-              className="block w-full text-sm text-slategray file:mr-3 file:h-10 file:rounded file:border-0 file:bg-field file:px-3 file:text-sm file:font-semibold file:text-harbor"
+              value={form.version}
+              onChange={(event) => setForm((current) => ({ ...current, version: event.target.value }))}
+              className="input"
             />
           </Field>
-          <button className="inline-flex h-10 w-full items-center justify-center gap-2 rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink">
+          <Field label="Review date">
+            <input
+              type="date"
+              value={form.nextReview}
+              onChange={(event) => setForm((current) => ({ ...current, nextReview: event.target.value }))}
+              className="input"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field label="Description">
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                className="min-h-24 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-signal focus:ring-2 focus:ring-signal/20"
+                placeholder="Purpose, scope, or review notes"
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label={editingDocumentId ? 'Replace file' : 'Document file'}>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] || null }))}
+                className="block w-full text-sm text-slategray file:mr-3 file:h-10 file:rounded file:border-0 file:bg-field file:px-3 file:text-sm file:font-semibold file:text-harbor"
+              />
+            </Field>
+          </div>
+        </div>
+        {documentError && <p className="mt-4 text-sm font-semibold text-rose">{documentError}</p>}
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-10 items-center justify-center rounded border border-line bg-white px-4 text-sm font-semibold text-slategray transition hover:text-ink"
+          >
+            Cancel
+          </button>
+          <button className="inline-flex h-10 items-center justify-center gap-2 rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink">
             <Upload className="h-4 w-4" />
             {editingDocumentId ? 'Save changes' : 'Upload to library'}
           </button>
-          {documentError && <p className="text-sm font-semibold text-rose">{documentError}</p>}
-          {editingDocumentId && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="inline-flex h-10 w-full items-center justify-center rounded border border-line bg-white px-4 text-sm font-semibold text-slategray transition hover:text-ink"
-            >
-              Cancel edit
-            </button>
-          )}
         </div>
       </form>
-      </div>
-    </section>
+    </div>
   );
 }
 
