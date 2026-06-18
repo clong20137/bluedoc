@@ -24,6 +24,7 @@ const upload = multer({
   dest: uploadsRoot,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, callback) => {
+    const extension = path.extname(file.originalname || '').toLowerCase();
     const allowed = new Set([
       'application/pdf',
       'application/msword',
@@ -34,8 +35,9 @@ const upload = multer({
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'text/plain'
     ]);
+    const allowedExtensions = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt']);
 
-    if (allowed.has(file.mimetype)) {
+    if (allowed.has(file.mimetype) || allowedExtensions.has(extension)) {
       callback(null, true);
       return;
     }

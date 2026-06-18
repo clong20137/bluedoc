@@ -70,6 +70,7 @@ function App() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [documentError, setDocumentError] = useState('');
   const [documentForm, setDocumentForm] = useState({
     title: '',
     category: 'Policy',
@@ -154,6 +155,7 @@ function App() {
   async function addDocument(event) {
     event.preventDefault();
     if (!documentForm.title.trim()) return;
+    setDocumentError('');
 
     const formData = new FormData();
     formData.append('title', documentForm.title);
@@ -168,8 +170,9 @@ function App() {
       formData.append('document', documentForm.file);
     }
 
-    if (editingDocumentId) {
-      await apiFetch(`/documents/${editingDocumentId}`, {
+    try {
+      if (editingDocumentId) {
+        const metadataResponse = await apiFetch(`/documents/${editingDocumentId}`, {
         method: 'PUT',
         body: JSON.stringify({
           title: documentForm.title,
@@ -183,32 +186,50 @@ function App() {
         })
       });
 
-      if (documentForm.file) {
-        await apiFetch(`/documents/${editingDocumentId}/file`, {
+        if (!metadataResponse.ok) {
+          const payload = await metadataResponse.json();
+          throw new Error(payload.error || 'Unable to save document metadata.');
+        }
+
+        if (documentForm.file) {
+          const fileResponse = await apiFetch(`/documents/${editingDocumentId}/file`, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!fileResponse.ok) {
+            const payload = await fileResponse.json();
+            throw new Error(payload.error || 'Unable to replace document file.');
+          }
+        }
+      } else {
+        const response = await apiFetch('/documents', {
           method: 'POST',
           body: formData
         });
-      }
-    } else {
-      await apiFetch('/documents', {
-        method: 'POST',
-        body: formData
-      });
-    }
 
-    setDocumentForm({
-      title: '',
-      category: 'Policy',
-      owner: '',
-      description: '',
-      version: '1.0',
-      nextReview: '2026-12-31',
-      requiredTraining: 'None',
-      file: null
-    });
-    setEditingDocumentId(null);
-    await loadDashboard();
-    setActiveTab('documents');
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.error || 'Unable to upload document.');
+        }
+      }
+
+      setDocumentForm({
+        title: '',
+        category: 'Policy',
+        owner: '',
+        description: '',
+        version: '1.0',
+        nextReview: '2026-12-31',
+        requiredTraining: 'None',
+        file: null
+      });
+      setEditingDocumentId(null);
+      await loadDashboard();
+      setActiveTab('documents');
+    } catch (requestError) {
+      setDocumentError(requestError.message);
+    }
   }
 
   function editDocument(document) {
@@ -484,6 +505,7 @@ function App() {
               onPublish={publishDocument}
               onDelete={deleteDocument}
               onSubmit={addDocument}
+              documentError={documentError}
               onCancel={() => {
                 setEditingDocumentId(null);
                 setDocumentForm({
@@ -575,6 +597,7 @@ function Documents({
   onPublish,
   onDelete,
   onSubmit,
+  documentError,
   onCancel,
   viewingDocument,
   onCloseViewer
@@ -747,6 +770,7 @@ function Documents({
             <Upload className="h-4 w-4" />
             {editingDocumentId ? 'Save changes' : 'Upload to library'}
           </button>
+          {documentError && <p className="text-sm font-semibold text-rose">{documentError}</p>}
           {editingDocumentId && (
             <button
               type="button"
