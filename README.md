@@ -38,7 +38,13 @@ The client runs at `http://127.0.0.1:5173` and proxies API requests to `http://1
 
 BlueDoc uses MySQL through `mysql2`. Update `backend\.env` with your local credentials before running `npm run db:setup` from the `backend` folder.
 
-The setup script creates the `bluedoc` database, creates the application tables, and seeds starter records for documents, training, employees, and activity.
+The setup script creates the `bluedoc` database and application tables.
+
+`npm run db:setup` creates the real empty schema only. Demo starter data is optional:
+
+```bash
+npm run db:seed
+```
 
 ## Shield SSO
 
@@ -56,7 +62,7 @@ SHIELD_DB_PASSWORD=your_shield_mysql_password
 SHIELD_DB_NAME=shield
 ```
 
-When the user is already signed into Shield on the same host, BlueDoc accepts that session. If no Shield session exists, BlueDoc lets the user sign in with Shield credentials, creates the same `shield_session` cookie, and opens the BlueDoc dashboard.
+When the user is already signed into Shield on the same host, BlueDoc accepts that session. If no Shield session exists, BlueDoc lets the user sign in with Shield credentials, creates the same `shield_session` cookie, and opens the BlueDoc dashboard. Signing out from BlueDoc revokes that shared Shield session cookie.
 
 ## Express + IIS Deployment
 

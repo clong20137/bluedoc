@@ -151,6 +151,33 @@ function setShieldSessionCookie(req, res, token) {
   });
 }
 
+function clearShieldSessionCookie(req, res) {
+  const sameSite = (process.env.SESSION_COOKIE_SAMESITE || 'lax').trim().toLowerCase();
+  const secureSetting = (process.env.SESSION_COOKIE_SECURE || 'false').trim().toLowerCase();
+  const secure = sameSite === 'none' ? true : secureSetting === 'true';
+
+  res.clearCookie(SHIELD_SESSION_COOKIE, {
+    httpOnly: true,
+    secure,
+    sameSite: sameSite === 'strict' || sameSite === 'none' ? sameSite : 'lax',
+    path: '/'
+  });
+}
+
+async function logoutShieldSession(req, res) {
+  const token = getCookieValue(req, SHIELD_SESSION_COOKIE);
+
+  if (token && isWellFormedSessionToken(token)) {
+    await shieldPool.execute(
+      'UPDATE user_sessions SET revokedAt = ? WHERE tokenHash = ? AND revokedAt IS NULL',
+      [new Date(), hashToken(token)]
+    );
+  }
+
+  clearShieldSessionCookie(req, res);
+  return res.json({ authenticated: false });
+}
+
 async function loginWithShieldCredentials(req, res) {
   const email = normalizeEmail(req.body?.email);
   const password = String(req.body?.password || '');
@@ -224,5 +251,6 @@ async function requireShieldSession(req, res, next) {
 module.exports = {
   getShieldAccountForRequest,
   loginWithShieldCredentials,
+  logoutShieldSession,
   requireShieldSession
 };

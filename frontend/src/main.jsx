@@ -9,6 +9,7 @@ import {
   FileText,
   GraduationCap,
   LayoutDashboard,
+  LogOut,
   Plus,
   Search,
   ShieldCheck,
@@ -169,6 +170,13 @@ function App() {
     }
   }
 
+  async function signOut() {
+    await apiFetch('/auth/logout', { method: 'POST' });
+    setDashboard(null);
+    setSession({ authenticated: false, signInUrl: SHIELD_SIGN_IN_URL });
+    setActiveTab('overview');
+  }
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-field text-ink">
@@ -266,6 +274,15 @@ function App() {
           <div className="mt-6 rounded border border-line bg-white p-3 text-sm">
             <p className="font-semibold">{session.account.displayName}</p>
             <p className="text-xs text-slategray">{session.account.email}</p>
+            <button
+              type="button"
+              onClick={signOut}
+              className="mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded border border-line bg-field text-xs font-semibold text-slategray transition hover:border-rose hover:text-rose"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
           </div>
         )}
 
@@ -321,6 +338,14 @@ function App() {
               >
                 <Plus className="h-4 w-4" />
                 New document
+              </button>
+              <button
+                type="button"
+                onClick={signOut}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded border border-line bg-white px-4 text-sm font-semibold text-slategray transition hover:border-rose hover:text-rose lg:hidden"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
               </button>
             </div>
           </div>

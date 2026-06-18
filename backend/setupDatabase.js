@@ -5,6 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 async function run() {
+  const shouldSeed = process.argv.includes('--seed');
   const connection = await mysql.createConnection({
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),
@@ -15,11 +16,17 @@ async function run() {
 
   try {
     const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-    const seedSql = fs.readFileSync(path.join(__dirname, 'seed.sql'), 'utf8');
 
     await connection.query(schemaSql);
-    await connection.query(seedSql);
-    console.log('BlueDoc MySQL database is ready.');
+
+    if (shouldSeed) {
+      const seedSql = fs.readFileSync(path.join(__dirname, 'seed.sql'), 'utf8');
+      await connection.query(seedSql);
+      console.log('BlueDoc MySQL database is ready with demo seed data.');
+      return;
+    }
+
+    console.log('BlueDoc MySQL database schema is ready.');
   } finally {
     await connection.end();
   }
