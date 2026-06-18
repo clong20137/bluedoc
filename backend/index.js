@@ -4,6 +4,7 @@ const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
 const { pingDatabase, query } = require('./db');
+const { initializeDatabase } = require('./initializeDatabase');
 const {
   getShieldAccountForRequest,
   getShieldWorkspaceUsers,
@@ -486,6 +487,13 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`BlueDoc Express app listening on http://127.0.0.1:${port}${appBasePath}`);
-});
+initializeDatabase()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`BlueDoc Express app listening on http://127.0.0.1:${port}${appBasePath}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to initialize BlueDoc database:', error);
+    process.exit(1);
+  });

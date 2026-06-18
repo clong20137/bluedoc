@@ -46,6 +46,8 @@ The setup script creates the `bluedoc` database and application tables.
 npm run db:seed
 ```
 
+The backend also initializes and migrates the BlueDoc schema automatically on startup, matching Shield's update behavior.
+
 ## Shield SSO
 
 BlueDoc uses Shield as the identity provider. The backend validates the existing `shield_session` cookie against Shield's `user_sessions` table.
