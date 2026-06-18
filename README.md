@@ -33,9 +33,10 @@ Production builds are configured for an Express backend mounted at `/bluedoc`. I
 c:\inetpub\bluedoc
 ```
 
-Build the React app before starting the production Express process:
+Deploy the full project folder there, not only `dist`, because Express and MySQL live in the Node backend. Then install dependencies and build:
 
 ```bash
+npm install
 npm run build
 npm start
 ```
@@ -56,7 +57,12 @@ VITE_API_BASE_URL=/bluedoc/api
 
 The generated `dist\web.config` routes all `/bluedoc` traffic through Express at `http://127.0.0.1:4100/bluedoc`.
 
-IIS needs URL Rewrite and Application Request Routing installed with proxying enabled. The Express process still needs to run on the server with access to MySQL.
+There are two supported IIS shapes:
+
+- Full Express app in `c:\inetpub\bluedoc`: use the root `web.config` with iisnode so IIS runs `server/index.js`.
+- Static `dist` folder only: use `dist\web.config` with URL Rewrite + Application Request Routing proxying to a separately running Express process on `127.0.0.1:4100`.
+
+The full Express app setup needs iisnode installed. The static proxy setup needs IIS URL Rewrite and Application Request Routing installed with proxying enabled. In both setups, Express needs access to MySQL.
 
 ## Current Workflows
 

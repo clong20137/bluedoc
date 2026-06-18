@@ -208,6 +208,10 @@ app.get('/', (req, res) => {
   res.redirect(appBasePath);
 });
 
+app.get(appBasePath, (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
 app.get(`${appBasePath}/*`, (req, res) => {
   res.sendFile(path.join(clientDistPath, 'index.html'));
 });
