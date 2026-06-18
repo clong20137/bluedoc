@@ -52,6 +52,9 @@ function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [documentForm, setDocumentForm] = useState({
     title: '',
     category: 'Policy',
@@ -140,6 +143,32 @@ function App() {
     setActiveTab('documents');
   }
 
+  async function signInWithShield(event) {
+    event.preventDefault();
+    setIsSigningIn(true);
+    setLoginError('');
+
+    try {
+      const response = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(loginForm)
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to sign in with Shield credentials.');
+      }
+
+      setSession({ authenticated: true, account: payload.account });
+      setLoginForm({ email: '', password: '' });
+      await loadDashboard();
+    } catch (requestError) {
+      setLoginError(requestError.message);
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-field text-ink">
@@ -160,14 +189,39 @@ function App() {
               <ShieldCheck className="h-6 w-6 text-harbor" />
               <h1 className="text-xl font-bold">Sign in with Shield</h1>
             </div>
-            <p className="mt-3 text-sm text-slategray">
-              BlueDoc uses your active Shield session for single sign-on.
+          <p className="mt-3 text-sm text-slategray">
+              Use your Shield credentials to open the BlueDoc dashboard.
             </p>
-            <a
-              href={session.signInUrl || SHIELD_SIGN_IN_URL}
-              className="mt-5 inline-flex h-10 items-center justify-center rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink"
-            >
-              Open Shield sign-in
+            <form onSubmit={signInWithShield} className="mt-5 space-y-4">
+              <Field label="Email">
+                <input
+                  value={loginForm.email}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
+                  className="input"
+                  type="email"
+                  autoComplete="email"
+                />
+              </Field>
+              <Field label="Password">
+                <input
+                  value={loginForm.password}
+                  onChange={(event) => setLoginForm((current) => ({ ...current, password: event.target.value }))}
+                  className="input"
+                  type="password"
+                  autoComplete="current-password"
+                />
+              </Field>
+              {loginError && <p className="text-sm font-semibold text-rose">{loginError}</p>}
+              <button
+                type="submit"
+                disabled={isSigningIn}
+                className="inline-flex h-10 w-full items-center justify-center rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSigningIn ? 'Signing in' : 'Sign in'}
+              </button>
+            </form>
+            <a href={session.signInUrl || SHIELD_SIGN_IN_URL} className="mt-4 inline-flex text-sm font-semibold text-harbor">
+              Open Shield instead
             </a>
           </div>
         </main>

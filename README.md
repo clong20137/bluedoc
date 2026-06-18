@@ -56,7 +56,7 @@ SHIELD_DB_PASSWORD=your_shield_mysql_password
 SHIELD_DB_NAME=shield
 ```
 
-When the user is already signed into Shield on the same host, BlueDoc accepts that session. If no Shield session exists, BlueDoc shows a Shield sign-in prompt.
+When the user is already signed into Shield on the same host, BlueDoc accepts that session. If no Shield session exists, BlueDoc lets the user sign in with Shield credentials, creates the same `shield_session` cookie, and opens the BlueDoc dashboard.
 
 ## Express + IIS Deployment
 

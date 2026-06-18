@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { pingDatabase, query } = require('./db');
-const { getShieldAccountForRequest, requireShieldSession } = require('./shieldAuth');
+const { getShieldAccountForRequest, loginWithShieldCredentials, requireShieldSession } = require('./shieldAuth');
 
 const app = express();
 const port = process.env.PORT || 4100;
@@ -157,6 +157,10 @@ apiRouter.get('/auth/session', asyncRoute(async (req, res) => {
   }
 
   res.json({ authenticated: true, account });
+}));
+
+apiRouter.post('/auth/login', asyncRoute(async (req, res) => {
+  await loginWithShieldCredentials(req, res);
 }));
 
 apiRouter.use(requireShieldSession);
