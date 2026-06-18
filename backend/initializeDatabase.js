@@ -15,18 +15,32 @@ async function createConnection() {
 }
 
 async function ensureDocumentColumns(connection) {
-  await connection.query(`
-    ALTER TABLE documents
-      ADD COLUMN IF NOT EXISTS description TEXT NULL,
-      ADD COLUMN IF NOT EXISTS original_file_name VARCHAR(255) NULL,
-      ADD COLUMN IF NOT EXISTS stored_file_name VARCHAR(255) NULL,
-      ADD COLUMN IF NOT EXISTS file_path VARCHAR(500) NULL,
-      ADD COLUMN IF NOT EXISTS mime_type VARCHAR(120) NULL,
-      ADD COLUMN IF NOT EXISTS file_size BIGINT NULL,
-      ADD COLUMN IF NOT EXISTS uploaded_by VARCHAR(160) NULL,
-      ADD COLUMN IF NOT EXISTS published_at TIMESTAMP NULL,
-      ADD COLUMN IF NOT EXISTS published_by VARCHAR(160) NULL
-  `);
+  const databaseName = process.env.DB_NAME || 'bluedoc';
+  const [rows] = await connection.query(
+    `SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = ?
+      AND TABLE_NAME = 'documents'`,
+    [databaseName]
+  );
+  const existingColumns = new Set(rows.map((row) => row.COLUMN_NAME));
+  const requiredColumns = [
+    ['description', 'TEXT NULL'],
+    ['original_file_name', 'VARCHAR(255) NULL'],
+    ['stored_file_name', 'VARCHAR(255) NULL'],
+    ['file_path', 'VARCHAR(500) NULL'],
+    ['mime_type', 'VARCHAR(120) NULL'],
+    ['file_size', 'BIGINT NULL'],
+    ['uploaded_by', 'VARCHAR(160) NULL'],
+    ['published_at', 'TIMESTAMP NULL'],
+    ['published_by', 'VARCHAR(160) NULL']
+  ];
+
+  for (const [columnName, definition] of requiredColumns) {
+    if (!existingColumns.has(columnName)) {
+      await connection.query(`ALTER TABLE documents ADD COLUMN \`${columnName}\` ${definition}`);
+    }
+  }
 }
 
 async function initializeDatabase(options = {}) {
