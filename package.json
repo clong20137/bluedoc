@@ -6,11 +6,11 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite --host 127.0.0.1",
-    "dev:server": "nodemon server/index.js",
-    "db:setup": "node server/setupDatabase.js",
+    "dev:server": "npm --prefix server run dev",
+    "db:setup": "npm --prefix server run db:setup",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "start": "node server/index.js"
+    "start": "npm --prefix server start"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

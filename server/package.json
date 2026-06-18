@@ -1,0 +1,21 @@
+{
+  "name": "bluedoc-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BlueDoc Express API and production app server.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js",
+    "db:setup": "node setupDatabase.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "mysql2": "^3.22.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

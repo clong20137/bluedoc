@@ -1,5 +1,5 @@
 {
   "watch": ["server"],
   "ext": "js,json",
-  "ignore": ["*.log", "dist", "node_modules", "src"]
+  "ignore": ["*.log", "dist", "node_modules", "src", "server/node_modules"]
 }
