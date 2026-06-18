@@ -2,6 +2,8 @@
 
 BlueDoc is a full-stack starter for document control, training assignments, policy acknowledgements, and compliance operations.
 
+BlueDoc follows the same split deployment style as Shield, with a dedicated Express backend and a built React frontend.
+
 ## Stack
 
 - React + Vite
