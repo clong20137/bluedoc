@@ -57,12 +57,14 @@ VITE_API_BASE_URL=/bluedoc/api
 
 The generated `dist\web.config` routes all `/bluedoc` traffic through Express at `http://127.0.0.1:4100/bluedoc`.
 
-There are two supported IIS shapes:
+Recommended IIS setup:
 
-- Full Express app in `c:\inetpub\bluedoc`: use the root `web.config` with iisnode so IIS runs `server/index.js`.
-- Static `dist` folder only: use `dist\web.config` with URL Rewrite + Application Request Routing proxying to a separately running Express process on `127.0.0.1:4100`.
+- Run Express separately on `127.0.0.1:4100`.
+- Make `c:\inetpub\bluedoc` an IIS Application with alias `bluedoc`.
+- Put the root `web.config` in `c:\inetpub\bluedoc\web.config`.
+- The IIS rule proxies `/bluedoc/*` to `http://127.0.0.1:4100/bluedoc/*`.
 
-The full Express app setup needs iisnode installed. The static proxy setup needs IIS URL Rewrite and Application Request Routing installed with proxying enabled. In both setups, Express needs access to MySQL.
+IIS needs URL Rewrite and Application Request Routing installed with proxying enabled. Express needs access to MySQL.
 
 ## Current Workflows
 
