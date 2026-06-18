@@ -17,6 +17,7 @@ import {
 import './styles.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const SHIELD_SIGN_IN_URL = import.meta.env.VITE_SHIELD_SIGN_IN_URL || 'http://cg00kq3.state.in.us/shield/';
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -33,10 +34,22 @@ function apiUrl(path) {
   return `${API_BASE_URL}${path}`;
 }
 
+function apiFetch(path, options = {}) {
+  return fetch(apiUrl(path), {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...options.headers
+    }
+  });
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [query, setQuery] = useState('');
   const [dashboard, setDashboard] = useState(null);
+  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [documentForm, setDocumentForm] = useState({
@@ -45,12 +58,44 @@ function App() {
     owner: ''
   });
 
+  async function loadSession() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await apiFetch('/auth/session');
+
+      if (response.status === 401) {
+        setSession({ authenticated: false, signInUrl: SHIELD_SIGN_IN_URL });
+        return null;
+      }
+
+      if (!response.ok) {
+        throw new Error('BlueDoc could not validate your Shield session.');
+      }
+
+      const payload = await response.json();
+      setSession(payload);
+      return payload;
+    } catch (requestError) {
+      setError(requestError.message);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function loadDashboard() {
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch(apiUrl('/dashboard'));
+      const response = await apiFetch('/dashboard');
+
+      if (response.status === 401) {
+        setSession({ authenticated: false, signInUrl: SHIELD_SIGN_IN_URL });
+        return;
+      }
 
       if (!response.ok) {
         throw new Error('BlueDoc could not connect to the database.');
@@ -66,7 +111,11 @@ function App() {
   }
 
   useEffect(() => {
-    loadDashboard();
+    loadSession().then((payload) => {
+      if (payload?.authenticated) {
+        loadDashboard();
+      }
+    });
   }, []);
 
   const filteredDocuments = useMemo(() => {
@@ -81,9 +130,8 @@ function App() {
     event.preventDefault();
     if (!documentForm.title.trim()) return;
 
-    await fetch(apiUrl('/documents'), {
+    await apiFetch('/documents', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(documentForm)
     });
 
@@ -104,6 +152,28 @@ function App() {
   }
 
   if (error || !dashboard) {
+    if (session && !session.authenticated) {
+      return (
+        <main className="grid min-h-screen place-items-center bg-field px-4 text-ink">
+          <div className="max-w-md rounded border border-line bg-white p-6 shadow-panel">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-6 w-6 text-harbor" />
+              <h1 className="text-xl font-bold">Sign in with Shield</h1>
+            </div>
+            <p className="mt-3 text-sm text-slategray">
+              BlueDoc uses your active Shield session for single sign-on.
+            </p>
+            <a
+              href={session.signInUrl || SHIELD_SIGN_IN_URL}
+              className="mt-5 inline-flex h-10 items-center justify-center rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink"
+            >
+              Open Shield sign-in
+            </a>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main className="grid min-h-screen place-items-center bg-field px-4 text-ink">
         <div className="max-w-md rounded border border-line bg-white p-6 shadow-panel">
@@ -138,6 +208,12 @@ function App() {
             <p className="text-xs font-medium uppercase tracking-wide text-slategray">Command library</p>
           </div>
         </div>
+        {session?.account && (
+          <div className="mt-6 rounded border border-line bg-white p-3 text-sm">
+            <p className="font-semibold">{session.account.displayName}</p>
+            <p className="text-xs text-slategray">{session.account.email}</p>
+          </div>
+        )}
 
         <nav className="mt-9 space-y-1">
           {tabs.map((tab) => {

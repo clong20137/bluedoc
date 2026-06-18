@@ -2,13 +2,28 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { pingDatabase, query } = require('./db');
+const { getShieldAccountForRequest, requireShieldSession } = require('./shieldAuth');
 
 const app = express();
 const port = process.env.PORT || 4100;
 const appBasePath = process.env.APP_BASE_PATH || '/bluedoc';
 const clientDistPath = path.join(__dirname, '..', 'frontend', 'dist');
 
-app.use(cors());
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 function completionPercent(completed, assigned) {
@@ -130,6 +145,21 @@ apiRouter.get('/health', asyncRoute(async (req, res) => {
   await pingDatabase();
   res.json({ ok: true, name: 'BlueDoc API', database: 'connected' });
 }));
+
+apiRouter.get('/auth/session', asyncRoute(async (req, res) => {
+  const account = await getShieldAccountForRequest(req);
+  if (!account) {
+    res.status(401).json({
+      authenticated: false,
+      signInUrl: process.env.SHIELD_APP_URL || 'http://cg00kq3.state.in.us/shield/'
+    });
+    return;
+  }
+
+  res.json({ authenticated: true, account });
+}));
+
+apiRouter.use(requireShieldSession);
 
 apiRouter.get('/dashboard', asyncRoute(async (req, res) => {
   const [documents, training, employees, activity] = await Promise.all([

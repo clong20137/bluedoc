@@ -40,6 +40,24 @@ BlueDoc uses MySQL through `mysql2`. Update `backend\.env` with your local crede
 
 The setup script creates the `bluedoc` database, creates the application tables, and seeds starter records for documents, training, employees, and activity.
 
+## Shield SSO
+
+BlueDoc uses Shield as the identity provider. The backend validates the existing `shield_session` cookie against Shield's `user_sessions` table.
+
+Add these values to `backend\.env`:
+
+```env
+ALLOWED_ORIGINS=http://cg00kq3.state.in.us,http://localhost,http://127.0.0.1
+SHIELD_APP_URL=http://cg00kq3.state.in.us/shield/
+SHIELD_DB_HOST=127.0.0.1
+SHIELD_DB_PORT=3306
+SHIELD_DB_USER=root
+SHIELD_DB_PASSWORD=your_shield_mysql_password
+SHIELD_DB_NAME=shield
+```
+
+When the user is already signed into Shield on the same host, BlueDoc accepts that session. If no Shield session exists, BlueDoc shows a Shield sign-in prompt.
+
 ## Express + IIS Deployment
 
 Production builds are configured for an Express backend mounted at `/bluedoc`. IIS should point the `/bluedoc` application to:
