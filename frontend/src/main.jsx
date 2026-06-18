@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -8,15 +8,16 @@ import {
   Edit3,
   Trash2,
   Eye,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   FileCheck2,
   FileText,
   GraduationCap,
   LayoutDashboard,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
+  Save,
   Upload,
   Search,
   ShieldCheck,
@@ -366,6 +367,13 @@ function App() {
     setViewingDocument(updatedDocument);
   }
 
+  async function refreshDocumentAfterContentSave(updatedDocument) {
+    await loadDashboard();
+    if (updatedDocument) {
+      setViewingDocument(updatedDocument);
+    }
+  }
+
   async function signInWithShield(event) {
     event.preventDefault();
     setIsSigningIn(true);
@@ -488,6 +496,15 @@ function App() {
         'fixed inset-y-0 left-0 z-20 hidden border-r border-line bg-white py-6 transition-all duration-200 lg:block',
         isSidebarCollapsed ? 'w-20 px-3' : 'w-72 px-5'
       )}>
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed((value) => !value)}
+          className="absolute -right-5 top-1/2 z-30 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-white text-harbor shadow-panel transition hover:bg-field lg:flex"
+          title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          aria-label={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+        >
+          {isSidebarCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+        </button>
         <div className={classNames('flex items-center', isSidebarCollapsed ? 'justify-center' : 'gap-3')}>
           <div className="grid h-10 w-10 place-items-center rounded bg-harbor text-white">
             <ShieldCheck className="h-6 w-6" />
@@ -499,18 +516,6 @@ function App() {
           </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setIsSidebarCollapsed((value) => !value)}
-          className={classNames(
-            'mt-5 inline-flex h-9 items-center justify-center rounded border border-line bg-field text-sm font-semibold text-slategray transition hover:text-harbor',
-            isSidebarCollapsed ? 'w-full' : 'w-full gap-2'
-          )}
-          title={isSidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-        >
-          {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          {!isSidebarCollapsed && 'Collapse'}
-        </button>
         {session?.account && (
           <div className={classNames('mt-6 rounded border border-line bg-white text-sm', isSidebarCollapsed ? 'p-2 text-center' : 'p-3')}>
             {isSidebarCollapsed ? (
@@ -651,6 +656,7 @@ function App() {
               onCancel={closeDocumentModal}
               viewingDocument={viewingDocument}
               onReplaceFile={replaceViewedDocument}
+              onContentSaved={refreshDocumentAfterContentSave}
               onCloseViewer={() => setViewingDocument(null)}
             />
           )}
@@ -733,6 +739,7 @@ function Documents({
   viewingDocument,
   onCloseViewer,
   onReplaceFile,
+  onContentSaved,
   isDocumentModalOpen,
   onNewDocument
 }) {
@@ -743,6 +750,7 @@ function Documents({
           document={viewingDocument}
           onClose={onCloseViewer}
           onReplaceFile={onReplaceFile}
+          onContentSaved={onContentSaved}
         />
       )}
       <div className="rounded border border-line bg-white shadow-panel">
@@ -960,16 +968,97 @@ function DocumentFormModal({ form, setForm, editingDocumentId, documentError, on
   );
 }
 
-function DocumentViewer({ document, onClose, onReplaceFile }) {
+function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
   const [replacementFile, setReplacementFile] = useState(null);
   const [replaceError, setReplaceError] = useState('');
   const [isReplacing, setIsReplacing] = useState(false);
+  const [contentState, setContentState] = useState({ contentHtml: '', diffHtml: '', loading: false, error: '' });
+  const [editorHtml, setEditorHtml] = useState('');
+  const [viewerMode, setViewerMode] = useState('preview');
+  const [isSavingContent, setIsSavingContent] = useState(false);
+  const editorRef = useRef(null);
 
   const previewUrl = document.previewUrl ? absoluteApiUrl(document.previewUrl) : '';
   const viewUrl = previewUrl || (document.viewUrl ? absoluteApiUrl(document.viewUrl) : '');
   const downloadUrl = document.downloadUrl ? absoluteApiUrl(document.downloadUrl) : '';
   const cacheBuster = [document.version, document.fileSize, document.updatedAt].filter(Boolean).join('-');
   const viewSource = cacheBuster ? `${viewUrl}${viewUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(cacheBuster)}` : viewUrl;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContent() {
+      setContentState((current) => ({ ...current, loading: true, error: '' }));
+
+      try {
+        const response = await apiFetch(`/documents/${document.id}/content`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Unable to load editable content.');
+        }
+
+        if (!cancelled) {
+          setContentState({
+            contentHtml: payload.contentHtml || '',
+            diffHtml: payload.diffHtml || '',
+            loading: false,
+            error: ''
+          });
+          setEditorHtml(payload.contentHtml || '');
+          setViewerMode('preview');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setContentState({ contentHtml: '', diffHtml: '', loading: false, error: error.message });
+          setEditorHtml('');
+        }
+      }
+    }
+
+    if (document.id) {
+      loadContent();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [document.id, document.updatedAt]);
+
+  async function saveContent() {
+    try {
+      setIsSavingContent(true);
+      setContentState((current) => ({ ...current, error: '' }));
+
+      const contentHtml = editorRef.current?.innerHTML || editorHtml;
+      const response = await apiFetch(`/documents/${document.id}/content`, {
+        method: 'PUT',
+        body: JSON.stringify({ contentHtml })
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Unable to save document content.');
+      }
+
+      setContentState({
+        contentHtml: payload.contentHtml || '',
+        diffHtml: payload.diffHtml || '',
+        loading: false,
+        error: ''
+      });
+      setEditorHtml(payload.contentHtml || '');
+      setViewerMode('changes');
+
+      if (payload.document) {
+        await onContentSaved?.(payload.document);
+      }
+    } catch (error) {
+      setContentState((current) => ({ ...current, error: error.message }));
+    } finally {
+      setIsSavingContent(false);
+    }
+  }
 
   async function replaceDocument() {
     if (!replacementFile || !onReplaceFile) return;
@@ -994,6 +1083,30 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
           <p className="text-sm text-slategray">{document.originalFileName}</p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setViewerMode('preview')}
+            className={classNames('h-9 rounded border px-3 text-sm font-semibold', viewerMode === 'preview' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewerMode('edit')}
+            disabled={contentState.loading || !contentState.contentHtml}
+            className={classNames('inline-flex h-9 items-center gap-2 rounded border px-3 text-sm font-semibold disabled:opacity-50', viewerMode === 'edit' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
+          >
+            <Edit3 className="h-4 w-4" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewerMode('changes')}
+            disabled={contentState.loading || !contentState.contentHtml}
+            className={classNames('h-9 rounded border px-3 text-sm font-semibold disabled:opacity-50', viewerMode === 'changes' ? 'border-harbor bg-harbor text-white' : 'border-line text-slategray hover:text-harbor')}
+          >
+            Changes
+          </button>
           {downloadUrl && (
             <a href={downloadUrl} className="inline-flex h-9 items-center gap-2 rounded border border-line px-3 text-sm font-semibold text-slategray hover:text-harbor">
               <Download className="h-4 w-4" />
@@ -1006,8 +1119,42 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
         </div>
       </div>
       <div className="h-[70vh] bg-field">
-        {viewSource ? (
+        {viewerMode === 'preview' && viewSource ? (
           <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
+        ) : viewerMode === 'edit' ? (
+          <div className="h-full overflow-auto bg-white p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slategray">Editing draft content</p>
+              <button
+                type="button"
+                onClick={saveContent}
+                disabled={isSavingContent}
+                className="inline-flex h-9 items-center gap-2 rounded bg-harbor px-3 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {isSavingContent ? 'Saving' : 'Save draft'}
+              </button>
+            </div>
+            <div
+              ref={editorRef}
+              key={`${document.id}-${document.updatedAt}-editor`}
+              contentEditable
+              suppressContentEditableWarning
+              className="min-h-[56vh] rounded border border-line bg-white p-5 text-sm leading-7 outline-none focus:border-signal focus:ring-2 focus:ring-signal/20"
+              dangerouslySetInnerHTML={{ __html: editorHtml || '<p></p>' }}
+            />
+          </div>
+        ) : viewerMode === 'changes' ? (
+          <div className="h-full overflow-auto bg-white p-5">
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-sm font-semibold text-slategray">
+              <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-green-200" /> Added</span>
+              <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded bg-red-200" /> Removed</span>
+            </div>
+            <div
+              className="rounded border border-line bg-white p-5 text-sm leading-7"
+              dangerouslySetInnerHTML={{ __html: contentState.diffHtml || '<p>No changes to show.</p>' }}
+            />
+          </div>
         ) : (
           <div className="grid h-full place-items-center p-6 text-center">
             <div>
@@ -1017,6 +1164,7 @@ function DocumentViewer({ document, onClose, onReplaceFile }) {
           </div>
         )}
       </div>
+      {contentState.error && <p className="border-t border-line px-5 py-3 text-sm font-semibold text-rose">{contentState.error}</p>}
       <div className="border-t border-line px-5 py-4">
         {viewSource && (
           <a

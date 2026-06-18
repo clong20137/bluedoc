@@ -109,6 +109,80 @@ function wrapPreviewHtml(title, body) {
 </html>`;
 }
 
+function normalizeHtmlText(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildChangedHtml(previousHtml, nextHtml) {
+  const previousWords = normalizeHtmlText(previousHtml).split(' ').filter(Boolean);
+  const nextWords = normalizeHtmlText(nextHtml).split(' ').filter(Boolean);
+  const rows = Array.from({ length: previousWords.length + 1 }, () => Array(nextWords.length + 1).fill(0));
+
+  for (let previousIndex = previousWords.length - 1; previousIndex >= 0; previousIndex -= 1) {
+    for (let nextIndex = nextWords.length - 1; nextIndex >= 0; nextIndex -= 1) {
+      rows[previousIndex][nextIndex] = previousWords[previousIndex] === nextWords[nextIndex]
+        ? rows[previousIndex + 1][nextIndex + 1] + 1
+        : Math.max(rows[previousIndex + 1][nextIndex], rows[previousIndex][nextIndex + 1]);
+    }
+  }
+
+  const parts = [];
+  let previousIndex = 0;
+  let nextIndex = 0;
+
+  while (previousIndex < previousWords.length && nextIndex < nextWords.length) {
+    if (previousWords[previousIndex] === nextWords[nextIndex]) {
+      parts.push(`<span>${escapeHtml(nextWords[nextIndex])}</span>`);
+      previousIndex += 1;
+      nextIndex += 1;
+    } else if (rows[previousIndex + 1][nextIndex] >= rows[previousIndex][nextIndex + 1]) {
+      parts.push(`<del style="background:#fee2e2;color:#991b1b;text-decoration:none;">${escapeHtml(previousWords[previousIndex])}</del>`);
+      previousIndex += 1;
+    } else {
+      parts.push(`<ins style="background:#dcfce7;color:#166534;text-decoration:none;">${escapeHtml(nextWords[nextIndex])}</ins>`);
+      nextIndex += 1;
+    }
+  }
+
+  while (previousIndex < previousWords.length) {
+    parts.push(`<del style="background:#fee2e2;color:#991b1b;text-decoration:none;">${escapeHtml(previousWords[previousIndex])}</del>`);
+    previousIndex += 1;
+  }
+
+  while (nextIndex < nextWords.length) {
+    parts.push(`<ins style="background:#dcfce7;color:#166534;text-decoration:none;">${escapeHtml(nextWords[nextIndex])}</ins>`);
+    nextIndex += 1;
+  }
+
+  return `<p style="line-height:1.8;">${parts.join(' ')}</p>`;
+}
+
+async function extractEditableHtml(filePath, originalFileName, mimeType) {
+  const fileName = String(originalFileName || '').toLowerCase();
+
+  if (fileName.endsWith('.docx')) {
+    const result = await mammoth.convertToHtml({ path: path.resolve(filePath) });
+    return result.value || '';
+  }
+
+  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+    const workbook = xlsx.readFile(filePath);
+    const firstSheetName = workbook.SheetNames[0];
+    const sheet = firstSheetName ? workbook.Sheets[firstSheetName] : null;
+    return sheet ? `<h2>${escapeHtml(firstSheetName)}</h2>${xlsx.utils.sheet_to_html(sheet)}` : '';
+  }
+
+  if (fileName.endsWith('.txt') || mimeType === 'text/plain') {
+    return `<pre>${escapeHtml(fs.readFileSync(path.resolve(filePath), 'utf8'))}</pre>`;
+  }
+
+  return '';
+}
+
 function toDocument(row) {
   return {
     id: row.id,
@@ -124,6 +198,7 @@ function toDocument(row) {
     mimeType: row.mime_type,
     fileSize: row.file_size,
     uploadedBy: row.uploaded_by,
+    hasEditableContent: Boolean(row.content_html),
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     publishedBy: row.published_by,
@@ -308,18 +383,23 @@ apiRouter.post('/documents', upload.single('document'), asyncRoute(async (req, r
     acknowledgements: 0,
     totalAssigned: 0
   };
+  document.contentHtml = await extractEditableHtml(document.filePath, document.originalFileName, document.mimeType);
+  document.baselineContentHtml = document.contentHtml;
+  document.contentUpdatedBy = document.uploadedBy;
 
   await query(`
     INSERT INTO documents
       (
         id, title, description, category, owner, version, status, next_review, required_training,
         original_file_name, stored_file_name, file_path, mime_type, file_size, uploaded_by,
+        content_html, baseline_content_html, content_updated_by, content_updated_at,
         acknowledgements, total_assigned
       )
     VALUES
       (
         :id, :title, :description, :category, :owner, :version, :status, :nextReview, :requiredTraining,
         :originalFileName, :storedFileName, :filePath, :mimeType, :fileSize, :uploadedBy,
+        :contentHtml, :baselineContentHtml, :contentUpdatedBy, CURRENT_TIMESTAMP,
         :acknowledgements, :totalAssigned
       )
   `, document);
@@ -392,6 +472,7 @@ apiRouter.post('/documents/:id/file', upload.single('document'), asyncRoute(asyn
     fileSize: req.file.size,
     uploadedBy: req.shieldAccount?.displayName || req.shieldAccount?.email || 'Unknown'
   };
+  payload.contentHtml = await extractEditableHtml(payload.filePath, payload.originalFileName, payload.mimeType);
 
   await query(`
     UPDATE documents
@@ -403,6 +484,9 @@ apiRouter.post('/documents/:id/file', upload.single('document'), asyncRoute(asyn
       mime_type = :mimeType,
       file_size = :fileSize,
       uploaded_by = :uploadedBy,
+      content_html = :contentHtml,
+      content_updated_by = :uploadedBy,
+      content_updated_at = CURRENT_TIMESTAMP,
       published_at = NULL,
       published_by = NULL
     WHERE id = :id
@@ -423,6 +507,7 @@ apiRouter.post('/documents/:id/publish', asyncRoute(async (req, res) => {
   await query(`
     UPDATE documents
     SET status = 'Active',
+      baseline_content_html = content_html,
       published_at = CURRENT_TIMESTAMP,
       published_by = :publishedBy
     WHERE id = :id
@@ -438,6 +523,60 @@ apiRouter.post('/documents/:id/publish', asyncRoute(async (req, res) => {
   }
 
   res.json(toDocument(rows[0]));
+}));
+
+apiRouter.get('/documents/:id/content', asyncRoute(async (req, res) => {
+  const rows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = rows[0];
+
+  if (!document) {
+    res.status(404).json({ error: 'Document not found.' });
+    return;
+  }
+
+  res.json({
+    id: document.id,
+    title: document.title,
+    contentHtml: document.content_html || '',
+    baselineContentHtml: document.baseline_content_html || '',
+    diffHtml: buildChangedHtml(document.baseline_content_html || '', document.content_html || ''),
+    updatedBy: document.content_updated_by,
+    updatedAt: document.content_updated_at
+  });
+}));
+
+apiRouter.put('/documents/:id/content', asyncRoute(async (req, res) => {
+  const contentHtml = String(req.body?.contentHtml || '').trim();
+  const updatedBy = req.shieldAccount?.displayName || req.shieldAccount?.email || 'Unknown';
+
+  await query(`
+    UPDATE documents
+    SET content_html = :contentHtml,
+      content_updated_by = :updatedBy,
+      content_updated_at = CURRENT_TIMESTAMP,
+      status = 'Draft'
+    WHERE id = :id
+  `, {
+    id: req.params.id,
+    contentHtml,
+    updatedBy
+  });
+
+  const rows = await query('SELECT * FROM documents WHERE id = :id LIMIT 1', { id: req.params.id });
+  const document = rows[0];
+
+  if (!document) {
+    res.status(404).json({ error: 'Document not found.' });
+    return;
+  }
+
+  res.json({
+    id: document.id,
+    contentHtml: document.content_html || '',
+    baselineContentHtml: document.baseline_content_html || '',
+    diffHtml: buildChangedHtml(document.baseline_content_html || '', document.content_html || ''),
+    document: toDocument(document)
+  });
 }));
 
 apiRouter.get('/documents/:id/download', asyncRoute(async (req, res) => {
@@ -478,6 +617,12 @@ apiRouter.get('/documents/:id/preview', asyncRoute(async (req, res) => {
   const fileName = String(document.original_file_name || '').toLowerCase();
   const filePath = path.resolve(document.file_path);
   const title = document.title || document.original_file_name || 'BlueDoc preview';
+
+  if (document.content_html) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(wrapPreviewHtml(title, document.content_html));
+    return;
+  }
 
   if (fileName.endsWith('.pdf')) {
     res.setHeader('Content-Type', 'application/pdf');

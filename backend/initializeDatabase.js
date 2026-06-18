@@ -32,6 +32,10 @@ async function ensureDocumentColumns(connection) {
     ['mime_type', 'VARCHAR(120) NULL'],
     ['file_size', 'BIGINT NULL'],
     ['uploaded_by', 'VARCHAR(160) NULL'],
+    ['content_html', 'LONGTEXT NULL'],
+    ['baseline_content_html', 'LONGTEXT NULL'],
+    ['content_updated_by', 'VARCHAR(160) NULL'],
+    ['content_updated_at', 'TIMESTAMP NULL'],
     ['published_at', 'TIMESTAMP NULL'],
     ['published_by', 'VARCHAR(160) NULL']
   ];
