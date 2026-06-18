@@ -236,19 +236,19 @@ async function loginWithShieldCredentials(req, res) {
 async function getShieldWorkspaceUsers() {
   const [rows] = await shieldPool.execute(
     `SELECT
-      id,
-      email,
-      firstName,
-      lastName,
-      displayName,
-      role,
-      district,
-      rank,
-      isActive
+      \`id\`,
+      \`email\`,
+      \`firstName\`,
+      \`lastName\`,
+      \`displayName\`,
+      \`role\`,
+      \`district\`,
+      \`rank\`,
+      \`isActive\`
     FROM users
-    WHERE passwordHash IS NOT NULL
-      AND COALESCE(isHidden, 0) = 0
-    ORDER BY isActive DESC, district ASC, lastName ASC, firstName ASC`
+    WHERE \`passwordHash\` IS NOT NULL
+      AND COALESCE(\`isHidden\`, 0) = 0
+    ORDER BY \`isActive\` DESC, \`district\` ASC, \`lastName\` ASC, \`firstName\` ASC`
   );
 
   return rows.map((user) => ({
