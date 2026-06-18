@@ -4,16 +4,41 @@ USE bluedoc;
 CREATE TABLE IF NOT EXISTS documents (
   id VARCHAR(40) PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
+  description TEXT NULL,
   category VARCHAR(80) NOT NULL DEFAULT 'Policy',
   owner VARCHAR(120) NOT NULL DEFAULT 'Unassigned',
   version VARCHAR(40) NOT NULL DEFAULT '1.0',
   status VARCHAR(40) NOT NULL DEFAULT 'Draft',
   next_review DATE NOT NULL,
   required_training VARCHAR(255) NOT NULL DEFAULT 'None',
+  original_file_name VARCHAR(255) NULL,
+  stored_file_name VARCHAR(255) NULL,
+  file_path VARCHAR(500) NULL,
+  mime_type VARCHAR(120) NULL,
+  file_size BIGINT NULL,
+  uploaded_by VARCHAR(160) NULL,
+  published_at TIMESTAMP NULL,
+  published_by VARCHAR(160) NULL,
   acknowledgements INT NOT NULL DEFAULT 0,
   total_assigned INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS document_versions (
+  id VARCHAR(40) PRIMARY KEY,
+  document_id VARCHAR(40) NOT NULL,
+  version VARCHAR(40) NOT NULL,
+  original_file_name VARCHAR(255) NOT NULL,
+  stored_file_name VARCHAR(255) NOT NULL,
+  file_path VARCHAR(500) NOT NULL,
+  mime_type VARCHAR(120) NOT NULL,
+  file_size BIGINT NOT NULL,
+  uploaded_by VARCHAR(160) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_document_versions_document
+    FOREIGN KEY (document_id) REFERENCES documents(id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS training (

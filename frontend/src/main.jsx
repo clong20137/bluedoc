@@ -4,6 +4,8 @@ import {
   Activity,
   AlertTriangle,
   BookOpenCheck,
+  Download,
+  Edit3,
   ClipboardCheck,
   FileCheck2,
   FileText,
@@ -11,6 +13,7 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
+  Upload,
   Search,
   ShieldCheck,
   Users
@@ -36,11 +39,12 @@ function apiUrl(path) {
 }
 
 function apiFetch(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   return fetch(apiUrl(path), {
     ...options,
     credentials: 'include',
     headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(options.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers
     }
   });
@@ -59,8 +63,14 @@ function App() {
   const [documentForm, setDocumentForm] = useState({
     title: '',
     category: 'Policy',
-    owner: ''
+    owner: '',
+    description: '',
+    version: '1.0',
+    nextReview: '2026-12-31',
+    requiredTraining: 'None',
+    file: null
   });
+  const [editingDocumentId, setEditingDocumentId] = useState(null);
 
   async function loadSession() {
     setLoading(true);
@@ -134,14 +144,80 @@ function App() {
     event.preventDefault();
     if (!documentForm.title.trim()) return;
 
-    await apiFetch('/documents', {
-      method: 'POST',
-      body: JSON.stringify(documentForm)
-    });
+    const formData = new FormData();
+    formData.append('title', documentForm.title);
+    formData.append('category', documentForm.category);
+    formData.append('owner', documentForm.owner);
+    formData.append('description', documentForm.description);
+    formData.append('version', documentForm.version);
+    formData.append('nextReview', documentForm.nextReview);
+    formData.append('requiredTraining', documentForm.requiredTraining);
 
-    setDocumentForm({ title: '', category: 'Policy', owner: '' });
+    if (documentForm.file) {
+      formData.append('document', documentForm.file);
+    }
+
+    if (editingDocumentId) {
+      await apiFetch(`/documents/${editingDocumentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: documentForm.title,
+          category: documentForm.category,
+          owner: documentForm.owner,
+          description: documentForm.description,
+          version: documentForm.version,
+          nextReview: documentForm.nextReview,
+          requiredTraining: documentForm.requiredTraining,
+          status: 'Draft'
+        })
+      });
+
+      if (documentForm.file) {
+        await apiFetch(`/documents/${editingDocumentId}/file`, {
+          method: 'POST',
+          body: formData
+        });
+      }
+    } else {
+      await apiFetch('/documents', {
+        method: 'POST',
+        body: formData
+      });
+    }
+
+    setDocumentForm({
+      title: '',
+      category: 'Policy',
+      owner: '',
+      description: '',
+      version: '1.0',
+      nextReview: '2026-12-31',
+      requiredTraining: 'None',
+      file: null
+    });
+    setEditingDocumentId(null);
     await loadDashboard();
     setActiveTab('documents');
+  }
+
+  function editDocument(document) {
+    setEditingDocumentId(document.id);
+    setDocumentForm({
+      title: document.title || '',
+      category: document.category || 'Policy',
+      owner: document.owner || '',
+      description: document.description || '',
+      version: document.version || '1.0',
+      nextReview: document.nextReview || '2026-12-31',
+      requiredTraining: document.requiredTraining || 'None',
+      file: null
+    });
+    setActiveTab('documents');
+  }
+
+  async function publishDocument(documentId) {
+    await apiFetch(`/documents/${documentId}/publish`, { method: 'POST' });
+    await loadDashboard();
   }
 
   async function signInWithShield(event) {
@@ -378,7 +454,23 @@ function App() {
               documents={filteredDocuments}
               form={documentForm}
               setForm={setDocumentForm}
+              editingDocumentId={editingDocumentId}
+              onEdit={editDocument}
+              onPublish={publishDocument}
               onSubmit={addDocument}
+              onCancel={() => {
+                setEditingDocumentId(null);
+                setDocumentForm({
+                  title: '',
+                  category: 'Policy',
+                  owner: '',
+                  description: '',
+                  version: '1.0',
+                  nextReview: '2026-12-31',
+                  requiredTraining: 'None',
+                  file: null
+                });
+              }}
             />
           )}
           {activeTab === 'training' && <Training training={dashboard.training} />}
@@ -445,7 +537,7 @@ function Overview({ dashboard }) {
   );
 }
 
-function Documents({ documents, form, setForm, onSubmit }) {
+function Documents({ documents, form, setForm, editingDocumentId, onEdit, onPublish, onSubmit, onCancel }) {
   return (
     <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
       <div className="rounded border border-line bg-white shadow-panel">
@@ -456,7 +548,7 @@ function Documents({ documents, form, setForm, onSubmit }) {
           <table className="min-w-full divide-y divide-line">
             <thead className="bg-field">
               <tr>
-                {['Document', 'Owner', 'Status', 'Training', 'Acknowledged'].map((heading) => (
+                {['Document', 'Owner', 'Status', 'File', 'Actions'].map((heading) => (
                   <th key={heading} className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide text-slategray">
                     {heading}
                   </th>
@@ -471,14 +563,43 @@ function Documents({ documents, form, setForm, onSubmit }) {
                     <p className="mt-1 text-sm text-slategray">
                       {document.category} - v{document.version} - review {document.nextReview}
                     </p>
+                    {document.description && <p className="mt-2 text-sm text-slategray">{document.description}</p>}
                   </td>
                   <td className="px-5 py-4 text-sm text-slategray">{document.owner}</td>
                   <td className="px-5 py-4">
                     <StatusPill status={document.status} />
                   </td>
-                  <td className="px-5 py-4 text-sm text-slategray">{document.requiredTraining}</td>
-                  <td className="px-5 py-4 text-sm font-semibold">
-                    {document.acknowledgements}/{document.totalAssigned}
+                  <td className="px-5 py-4 text-sm text-slategray">
+                    {document.originalFileName || 'No file'}
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex flex-wrap gap-2">
+                      {document.downloadUrl && (
+                        <a
+                          href={apiUrl(document.downloadUrl)}
+                          className="inline-flex h-8 items-center gap-1 rounded border border-line px-2 text-xs font-semibold text-slategray hover:text-harbor"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onEdit(document)}
+                        className="inline-flex h-8 items-center gap-1 rounded border border-line px-2 text-xs font-semibold text-slategray hover:text-harbor"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onPublish(document.id)}
+                        className="inline-flex h-8 items-center gap-1 rounded border border-mint/30 bg-mint/10 px-2 text-xs font-semibold text-mint hover:bg-mint hover:text-white"
+                      >
+                        <FileCheck2 className="h-3.5 w-3.5" />
+                        Publish
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -488,7 +609,7 @@ function Documents({ documents, form, setForm, onSubmit }) {
       </div>
 
       <form onSubmit={onSubmit} className="rounded border border-line bg-white p-5 shadow-panel">
-        <h3 className="text-lg font-bold">Create controlled document</h3>
+        <h3 className="text-lg font-bold">{editingDocumentId ? 'Edit controlled document' : 'Upload controlled document'}</h3>
         <div className="mt-5 space-y-4">
           <Field label="Title">
             <input
@@ -518,10 +639,60 @@ function Documents({ documents, form, setForm, onSubmit }) {
               placeholder="Division or unit"
             />
           </Field>
+          <Field label="Description">
+            <textarea
+              value={form.description}
+              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+              className="min-h-24 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none transition focus:border-signal focus:ring-2 focus:ring-signal/20"
+              placeholder="Purpose, scope, or review notes"
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Version">
+              <input
+                value={form.version}
+                onChange={(event) => setForm((current) => ({ ...current, version: event.target.value }))}
+                className="input"
+              />
+            </Field>
+            <Field label="Review date">
+              <input
+                type="date"
+                value={form.nextReview}
+                onChange={(event) => setForm((current) => ({ ...current, nextReview: event.target.value }))}
+                className="input"
+              />
+            </Field>
+          </div>
+          <Field label="Required training">
+            <input
+              value={form.requiredTraining}
+              onChange={(event) => setForm((current) => ({ ...current, requiredTraining: event.target.value }))}
+              className="input"
+              placeholder="None"
+            />
+          </Field>
+          <Field label={editingDocumentId ? 'Replace file' : 'Document file'}>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] || null }))}
+              className="block w-full text-sm text-slategray file:mr-3 file:h-10 file:rounded file:border-0 file:bg-field file:px-3 file:text-sm file:font-semibold file:text-harbor"
+            />
+          </Field>
           <button className="inline-flex h-10 w-full items-center justify-center gap-2 rounded bg-harbor px-4 text-sm font-semibold text-white transition hover:bg-ink">
-            <Plus className="h-4 w-4" />
-            Add to library
+            <Upload className="h-4 w-4" />
+            {editingDocumentId ? 'Save changes' : 'Upload to library'}
           </button>
+          {editingDocumentId && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex h-10 w-full items-center justify-center rounded border border-line bg-white px-4 text-sm font-semibold text-slategray transition hover:text-ink"
+            >
+              Cancel edit
+            </button>
+          )}
         </div>
       </form>
     </section>

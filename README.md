@@ -125,7 +125,7 @@ Use `iis-root-web.config` as the template for that file. It proxies `/api/*` to 
 ## Current Workflows
 
 - Organization overview with compliance metrics
-- Controlled documents with review status and owners
+- Controlled documents with file upload, metadata editing, file replacement, download, and publish status
 - Training assignments connected to required documents
 - Staff compliance table with acknowledgement progress
 - Express API endpoints for documents, training, employees, and activity
