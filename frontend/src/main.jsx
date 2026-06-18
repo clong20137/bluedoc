@@ -2,8 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   AlertTriangle,
   BookOpenCheck,
+  Bold,
   Download,
   Edit3,
   Trash2,
@@ -15,12 +19,19 @@ import {
   FileText,
   GraduationCap,
   LayoutDashboard,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
   LogOut,
   Plus,
+  Redo2,
   Save,
   Upload,
   Search,
   ShieldCheck,
+  Underline,
+  Undo2,
   Users,
   X
 } from 'lucide-react';
@@ -940,6 +951,21 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
   const cacheBuster = [document.version, document.fileSize, document.updatedAt].filter(Boolean).join('-');
   const viewSource = cacheBuster ? `${viewUrl}${viewUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(cacheBuster)}` : viewUrl;
 
+  function runEditorCommand(command, value = null) {
+    if (viewerMode !== 'edit') {
+      setViewerMode('edit');
+    }
+
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+  }
+
+  function addLink() {
+    const url = window.prompt('Enter link URL');
+    if (!url) return;
+    runEditorCommand('createLink', url);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -1078,17 +1104,20 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
           <iframe title={document.title} src={viewSource} className="h-full w-full border-0" />
         ) : viewerMode === 'edit' ? (
           <div className="h-full overflow-auto bg-white p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-slategray">Editing draft content</p>
-              <button
-                type="button"
-                onClick={saveContent}
-                disabled={isSavingContent}
-                className="inline-flex h-9 items-center gap-2 rounded bg-harbor px-3 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
-                {isSavingContent ? 'Saving' : 'Save draft'}
-              </button>
+            <div className="mb-3 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slategray">Editing draft content</p>
+                <button
+                  type="button"
+                  onClick={saveContent}
+                  disabled={isSavingContent}
+                  className="inline-flex h-9 items-center gap-2 rounded bg-harbor px-3 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  <Save className="h-4 w-4" />
+                  {isSavingContent ? 'Saving' : 'Save draft'}
+                </button>
+              </div>
+              <RichTextToolbar onCommand={runEditorCommand} onLink={addLink} />
             </div>
             <div
               ref={editorRef}
@@ -1151,6 +1180,75 @@ function DocumentViewer({ document, onClose, onReplaceFile, onContentSaved }) {
         </div>
         {replaceError && <p className="mt-2 text-sm font-semibold text-rose">{replaceError}</p>}
       </div>
+    </div>
+  );
+}
+
+function RichTextToolbar({ onCommand, onLink }) {
+  const buttonClass = 'grid h-9 w-9 place-items-center rounded border border-line bg-white text-slategray transition hover:text-harbor';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded border border-line bg-field p-2">
+      <button type="button" onClick={() => onCommand('undo')} className={buttonClass} title="Undo">
+        <Undo2 className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('redo')} className={buttonClass} title="Redo">
+        <Redo2 className="h-4 w-4" />
+      </button>
+      <span className="h-6 w-px bg-line" />
+      <select
+        onChange={(event) => onCommand('formatBlock', event.target.value)}
+        className="h-9 rounded border border-line bg-white px-2 text-sm font-semibold text-slategray"
+        defaultValue="p"
+        title="Paragraph style"
+      >
+        <option value="p">Normal</option>
+        <option value="h1">Heading 1</option>
+        <option value="h2">Heading 2</option>
+        <option value="h3">Heading 3</option>
+        <option value="blockquote">Quote</option>
+      </select>
+      <select
+        onChange={(event) => onCommand('fontSize', event.target.value)}
+        className="h-9 rounded border border-line bg-white px-2 text-sm font-semibold text-slategray"
+        defaultValue="3"
+        title="Text size"
+      >
+        <option value="2">Small</option>
+        <option value="3">Normal</option>
+        <option value="4">Large</option>
+        <option value="5">Title</option>
+      </select>
+      <span className="h-6 w-px bg-line" />
+      <button type="button" onClick={() => onCommand('bold')} className={buttonClass} title="Bold">
+        <Bold className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('italic')} className={buttonClass} title="Italic">
+        <Italic className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('underline')} className={buttonClass} title="Underline">
+        <Underline className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={onLink} className={buttonClass} title="Link">
+        <Link2 className="h-4 w-4" />
+      </button>
+      <span className="h-6 w-px bg-line" />
+      <button type="button" onClick={() => onCommand('insertUnorderedList')} className={buttonClass} title="Bulleted list">
+        <List className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('insertOrderedList')} className={buttonClass} title="Numbered list">
+        <ListOrdered className="h-4 w-4" />
+      </button>
+      <span className="h-6 w-px bg-line" />
+      <button type="button" onClick={() => onCommand('justifyLeft')} className={buttonClass} title="Align left">
+        <AlignLeft className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('justifyCenter')} className={buttonClass} title="Align center">
+        <AlignCenter className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onCommand('justifyRight')} className={buttonClass} title="Align right">
+        <AlignRight className="h-4 w-4" />
+      </button>
     </div>
   );
 }
@@ -1227,7 +1325,6 @@ function People({ employees }) {
     </section>
   );
 }
-
 function TrainingRow({ item }) {
   return (
     <div className="grid gap-4 px-5 py-4 md:grid-cols-[1fr_11rem] md:items-center">
